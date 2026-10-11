@@ -1,0 +1,10 @@
+[Unit]
+Description=LifeOS Auto-Update alle 10 Minuten
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=10min
+RandomizedDelaySec=30
+
+[Install]
+WantedBy=timers.target

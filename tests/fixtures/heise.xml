@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>heise online News</title>
+  <entry>
+    <title type="html">Neue Linux-Version</title>
+    <link rel="alternate" type="text/html" href="https://www.heise.de/news/linux-1.html"/>
+    <published>2026-10-11T18:45:00+02:00</published>
+    <updated>2026-10-11T18:50:00+02:00</updated>
+  </entry>
+  <entry>
+    <title>Nur updated</title>
+    <link href="https://www.heise.de/news/zwei-2.html"/>
+    <updated>2026-10-11T12:00:00+02:00</updated>
+  </entry>
+</feed>

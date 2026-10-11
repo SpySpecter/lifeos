@@ -1,0 +1,7 @@
+[Unit]
+Description=LifeOS: nächtliches SQLite-Backup
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/lifeos/backup.sh
