@@ -26,6 +26,7 @@ describe("Untis-MCP", () => {
     const { json } = await rpc({ jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "t", version: "1" } } });
     expect(json.result).toMatchObject({ protocolVersion: "2025-06-18", capabilities: { tools: {} }, serverInfo: { name: "lifeos-untis" } });
     expect(json.result.instructions).toContain("nicht den Google-Kalender");
+    expect(json.result.instructions).toContain("📝 Klausur");
   });
 
   it("Benachrichtigungen werden mit 202 quittiert", async () => {

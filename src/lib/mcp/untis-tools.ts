@@ -24,7 +24,8 @@ export const UNTIS_SERVER_INFO: McpServerInfo = {
   version: "1.0.0",
   instructions:
     "Stundenplan von Luis aus WebUntis (Oberstufe, Kurse wie 'LK If 1' = Informatik-Leistungskurs, 'SK' = Seminarkurs, 'PB' = Politische Bildung). " +
-    "Für alle Fragen zu Stunden, Räumen, Ausfällen, Vertretungen, Klausuren und Hausaufgaben diese Tools nutzen – nicht den Google-Kalender. Daten in Europe/Berlin.",
+    "Für alle Fragen zu Stunden, Räumen, Ausfällen und Vertretungen diese Tools nutzen – nicht den Google-Kalender. " +
+    "Klausurtermine stehen zusätzlich im Google-Kalender als '📝 Klausur: <Kurs>', falls Untis Prüfungen nicht freigibt. Daten in Europe/Berlin.",
 };
 
 const isoDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Format YYYY-MM-DD");
@@ -49,7 +50,8 @@ const describe = (l: SchoolLesson) => {
     start: l.start,
     end: l.end,
     course: l.subject,
-    subject: l.subjectLong ?? c.title,
+    // manche Schulen tragen als Langname nur das Kürzel ein
+    subject: l.subjectLong && l.subjectLong !== l.subject ? l.subjectLong : c.title,
     kind: c.kind,
     rooms: l.rooms,
     teachers: l.teachers,
@@ -65,6 +67,16 @@ async function lessons(from: string, to: string): Promise<SchoolLesson[]> {
 }
 
 const now = () => today(env().APP_TZ);
+
+/** Viele Schulen sperren Prüfungen/Hausaufgaben für Schülerkonten – dann eine verständliche Meldung statt "403". */
+async function unlessForbidden<T>(what: string, hint: string, fn: () => Promise<T>): Promise<T | string> {
+  try {
+    return await fn();
+  } catch (err) {
+    if (/status code 40[13]|forbidden|no right/i.test((err as Error).message)) return `Die Schule gibt ${what} in Untis für dieses Konto nicht frei. ${hint}`;
+    throw err;
+  }
+}
 
 export const untisTools = [
   defineTool({
@@ -108,8 +120,10 @@ export const untisTools = [
       span(from, to, EXAM_RANGE_DAYS);
       if (isDemo()) return [{ day: addDays(from, 9), start: "08:00", end: "10:15", subject: "LK Ma 1", type: "Klausur", name: "Analysis", rooms: ["A204"], text: null }] satisfies SchoolExam[];
       ensureConfigured();
-      const exams = (await cached(db(), `untis:mcp:exams:${from}:${to}`, 60 * 60, () => fetchExams(from, to))).data;
-      return exams.length ? exams.map((x) => ({ ...x, subjectName: parseCourse(x.subject).title })) : "Untis meldet keine Prüfungen im Zeitraum.";
+      return unlessForbidden("Prüfungen", "Klausurtermine stehen im Google-Kalender als „📝 Klausur: …“.", async () => {
+        const exams = (await cached(db(), `untis:mcp:exams:${from}:${to}`, 60 * 60, () => fetchExams(from, to))).data;
+        return exams.length ? exams.map((x) => ({ ...x, subjectName: parseCourse(x.subject).title })) : "Untis meldet keine Prüfungen im Zeitraum.";
+      });
     },
   }),
   defineTool({
@@ -122,8 +136,10 @@ export const untisTools = [
       span(from, to, 60);
       if (isDemo()) return [{ assigned: from, due: addDays(from, 9), subject: "GK De 2", text: "Gedichtanalyse fertigstellen", completed: false }] satisfies SchoolHomework[];
       ensureConfigured();
-      const hw = (await cached(db(), `untis:mcp:homework:${from}:${to}`, 30 * 60, () => fetchHomework(from, to))).data;
-      return hw.length ? hw : "Untis meldet keine Hausaufgaben im Zeitraum.";
+      return unlessForbidden("Hausaufgaben", "Hinweise der Lehrkräfte stehen teils im Feld „note“ der Stunden (get_timetable).", async () => {
+        const hw = (await cached(db(), `untis:mcp:homework:${from}:${to}`, 30 * 60, () => fetchHomework(from, to))).data;
+        return hw.length ? hw : "Untis meldet keine Hausaufgaben im Zeitraum.";
+      });
     },
   }),
 ];
