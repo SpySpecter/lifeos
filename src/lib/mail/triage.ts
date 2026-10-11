@@ -168,9 +168,11 @@ export async function runTriage(db: DB, trigger: "timer" | "manuell"): Promise<R
       const seen = new Set(
         (db.prepare("SELECT id FROM mail_items WHERE account = ?").all(account) as { id: string }[]).map((r) => r.id),
       );
-      summary.archived += await archiveOldFinance(db, account, token);
       const fresh = ids.filter((id) => !seen.has(id));
-      if (!fresh.length) continue;
+      if (!fresh.length) {
+        summary.archived += await archiveOldFinance(db, account, token);
+        continue;
+      }
 
       const metas: MailMeta[] = [];
       for (let i = 0; i < fresh.length; i += 10) {
@@ -243,6 +245,8 @@ export async function runTriage(db: DB, trigger: "timer" | "manuell"): Promise<R
           summary.notes.push(`${g.mails.length}× ${g.action}/${g.category ?? "-"} nicht ausgeführt: ${(err as Error).message}`);
         }
       }
+      // erst nach dem Einordnen: so werden auch gerade erkannte ältere Rechnungen sofort archiviert
+      summary.archived += await archiveOldFinance(db, account, token);
     }
     db.prepare("UPDATE mail_runs SET finished_at = ?, summary = ? WHERE id = ?").run(Date.now(), JSON.stringify(summary), runId);
     return summary;
