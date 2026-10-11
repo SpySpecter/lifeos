@@ -27,7 +27,7 @@ Das Skript installiert Docker, Tailscale und die GitHub CLI aus den offiziellen 
 Zum Schluss, **nachdem** du dich einmal über Tailscale verbunden hast (`ssh ubuntu@lifeos`):
 
 ```bash
-sudo bash /opt/lifeos/deploy/bootstrap-vps.sh --lockdown-ssh
+sudo --preserve-env=SSH_CLIENT bash /opt/lifeos/deploy/bootstrap-vps.sh --lockdown-ssh
 ```
 
 Ab dann ist der VPS aus dem Internet gar nicht mehr erreichbar (kein offener Port außer Tailscales UDP-Port).

@@ -5,7 +5,7 @@
 #   gh auth login -s read:packages            # einmalig, als normaler Nutzer
 #   sudo git clone https://github.com/SpySpecter/lifeos /opt/lifeos
 #   sudo bash /opt/lifeos/deploy/bootstrap-vps.sh
-#   sudo bash /opt/lifeos/deploy/bootstrap-vps.sh --lockdown-ssh   # danach: öffentliches SSH schließen
+#   sudo --preserve-env=SSH_CLIENT bash /opt/lifeos/deploy/bootstrap-vps.sh --lockdown-ssh   # danach: öffentliches SSH schließen
 #
 # Ergebnis: LifeOS läuft in Docker auf 127.0.0.1:3000 und ist NUR im Tailnet erreichbar:
 #   https://<hostname>.<tailnet>.ts.net  (TLS-Zertifikat verwaltet Tailscale)
@@ -25,11 +25,15 @@ ts_dns() { tailscale status --json | python3 -c 'import sys,json; print(json.loa
 lockdown_ssh() {
   log "Öffentliches SSH schließen"
   tailscale status >/dev/null 2>&1 || die "Tailscale ist nicht verbunden"
-  local client_ip="${SSH_CLIENT%% *}"
+  # sudo verwirft SSH_CLIENT – daher mit `sudo --preserve-env=SSH_CLIENT` starten (siehe Kopf) oder aus `who` ableiten
+  local client="${SSH_CLIENT:-}"
+  [[ -n "$client" ]] || client="$(who -m 2>/dev/null | grep -oE '\(([0-9a-f.:]+)\)' | tr -d '()' || true)"
+  local client_ip="${client%% *}"
   if [[ -n "$client_ip" && ! "$client_ip" =~ ^100\.(6[4-9]|[7-9][0-9]|1[01][0-9]|12[0-7])\. ]]; then
     die "Du bist über $client_ip verbunden, nicht über Tailscale. Erst per 'ssh $DEPLOY_USER@$(tailscale ip -4)' neu verbinden."
   fi
   ufw delete allow 22/tcp >/dev/null 2>&1 || true
+  touch /etc/lifeos-ssh-locked
   ufw status verbose
   echo "SSH ist jetzt nur noch über das Tailnet erreichbar: ssh $DEPLOY_USER@$(tailscale ip -4)"
 }
@@ -72,7 +76,8 @@ ufw default deny incoming
 ufw default allow outgoing
 ufw allow in on tailscale0
 ufw allow 41641/udp comment 'Tailscale direkte Verbindungen'
-ufw allow 22/tcp comment 'SSH (Notzugang, später: --lockdown-ssh)'
+# Nach --lockdown-ssh nicht wieder öffnen, wenn das Skript erneut läuft
+[[ -f /etc/lifeos-ssh-locked ]] || ufw allow 22/tcp comment 'SSH (Notzugang, später: --lockdown-ssh)'
 ufw --force enable
 
 log "GHCR-Login (Image ziehen, auch wenn das Paket privat ist)"
