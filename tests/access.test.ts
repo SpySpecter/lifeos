@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { accessConfigFromEnv, checkAccess } from "@/lib/access";
+import { accessConfigFromEnv, checkAccess, checkOrigin } from "@/lib/access";
 
 const strict = { demo: false, requireTailscale: true, allowedUsers: ["spyspecter@github"] };
 
@@ -28,5 +28,22 @@ describe("checkAccess", () => {
       requireTailscale: true,
       allowedUsers: ["a@x", "b@y"],
     });
+  });
+});
+
+describe("checkOrigin (CSRF)", () => {
+  const app = "https://lifeos.tailnet.ts.net";
+  it("lässt Lesezugriffe und Anfragen ohne Origin durch", () => {
+    expect(checkOrigin("GET", "https://evil.example", "x", app).allowed).toBe(true);
+    expect(checkOrigin("POST", null, "127.0.0.1:3000", app).allowed).toBe(true);
+  });
+  it("erlaubt die eigene Origin und setzt den weitergeleiteten Host", () => {
+    expect(checkOrigin("POST", app, "127.0.0.1:3000", app)).toEqual({ allowed: true, forwardedHost: "lifeos.tailnet.ts.net" });
+    expect(checkOrigin("POST", "http://localhost:3000", "localhost:3000", app)).toEqual({ allowed: true });
+  });
+  it("blockiert fremde Seiten – auch aus anderen Tailnets", () => {
+    expect(checkOrigin("POST", "https://evil.example", "127.0.0.1:3000", app).allowed).toBe(false);
+    expect(checkOrigin("POST", "https://x.other.ts.net", "lifeos.tailnet.ts.net", app).allowed).toBe(false);
+    expect(checkOrigin("POST", "null", "lifeos.tailnet.ts.net", app).allowed).toBe(false);
   });
 });

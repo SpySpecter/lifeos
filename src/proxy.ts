@@ -1,10 +1,25 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { accessConfigFromEnv, checkAccess } from "@/lib/access";
+import { accessConfigFromEnv, checkAccess, checkOrigin } from "@/lib/access";
+
+const text = (body: string, status: number) =>
+  new NextResponse(body, { status, headers: { "Content-Type": "text/plain; charset=utf-8" } });
 
 export function proxy(request: NextRequest) {
   const decision = checkAccess(request.nextUrl.pathname, request.headers.get("tailscale-user-login"), accessConfigFromEnv());
-  if (!decision.allowed) {
-    return new NextResponse(decision.reason, { status: decision.status, headers: { "Content-Type": "text/plain; charset=utf-8" } });
+  if (!decision.allowed) return text(decision.reason, decision.status);
+
+  const origin = checkOrigin(
+    request.method,
+    request.headers.get("origin"),
+    request.headers.get("x-forwarded-host") ?? request.headers.get("host"),
+    process.env.APP_URL ?? "http://localhost:3000",
+  );
+  if (!origin.allowed) return text("Anfrage von fremder Herkunft abgelehnt.", 403);
+
+  if (origin.forwardedHost) {
+    const headers = new Headers(request.headers);
+    headers.set("x-forwarded-host", origin.forwardedHost);
+    return NextResponse.next({ request: { headers } });
   }
   return NextResponse.next();
 }
