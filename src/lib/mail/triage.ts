@@ -1,6 +1,6 @@
 import "server-only";
 import { GMAIL_MODIFY, googleAccessToken, googleAccounts, googleKey, hasScope } from "@/integrations/google";
-import type { DB } from "../db";
+import { type DB, plainRows } from "../db";
 import { env } from "../env";
 import { BudgetExceededError, monthSpendUsd, structuredCompletion } from "../openai";
 import { getSettings } from "../settings";
@@ -334,10 +334,12 @@ export async function mailAssistantData(db: DB): Promise<MailAssistantData> {
     | undefined;
   const accounts = await googleAccounts();
   return {
-    pending: db.prepare(`${rowSelect} WHERE status = 'pending' ORDER BY date DESC LIMIT 20`).all() as MailRow[],
-    recent: db
-      .prepare(`${rowSelect} WHERE status = 'done' AND source != 'nutzer' AND action IN ('trash', 'archive') ORDER BY processed_at DESC, date DESC LIMIT 8`)
-      .all() as MailRow[],
+    pending: plainRows<MailRow>(db.prepare(`${rowSelect} WHERE status = 'pending' ORDER BY date DESC LIMIT 20`).all()),
+    recent: plainRows<MailRow>(
+      db
+        .prepare(`${rowSelect} WHERE status = 'done' AND source != 'nutzer' AND action IN ('trash', 'archive') ORDER BY processed_at DESC, date DESC LIMIT 8`)
+        .all(),
+    ),
     today: { archived: n("archive"), trashed: n("trash"), kept: n("keep") },
     lastRun: run ? { at: run.finished_at, summary: run.summary ? JSON.parse(run.summary) : null, error: run.error } : null,
     needsReconnect: accounts.filter((a) => !hasScope(a, GMAIL_MODIFY)),

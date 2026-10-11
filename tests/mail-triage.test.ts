@@ -143,6 +143,14 @@ describe("runTriage", () => {
     expect(loadRules(db()).find((r) => r.pattern === "noreply@discord.com")?.action).toBe("archive");
   });
 
+  it("liefert der UI normale Objekte (React lehnt Objekte ohne Prototyp ab)", async () => {
+    const { mailAssistantData } = await import("@/lib/mail/triage");
+    const { db } = await import("@/lib/db");
+    const data = await mailAssistantData(db());
+    for (const row of [...data.pending, ...data.recent]) expect(Object.getPrototypeOf(row)).toBe(Object.prototype);
+    expect(data.recent.length).toBeGreaterThan(0);
+  });
+
   it("verbucht die KI-Kosten", async () => {
     const { monthSpendUsd } = await import("@/lib/openai");
     const { db } = await import("@/lib/db");

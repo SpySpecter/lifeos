@@ -6,7 +6,7 @@ import { Suspense } from "react";
 import { DisconnectButton } from "@/components/disconnect-button";
 import { MailProfileForm, ProfileForm, RuleForm, RuleList } from "@/components/settings-forms";
 import { GMAIL_MODIFY, googleAccounts, hasScope } from "@/integrations/google";
-import { db } from "@/lib/db";
+import { db, plainRows } from "@/lib/db";
 import { monthSpendUsd } from "@/lib/openai";
 import { getSettings } from "@/lib/settings";
 import { WidgetSkeleton } from "@/components/widget-card";
@@ -85,7 +85,9 @@ async function SettingsContent({ searchParams }: { searchParams: Promise<Record<
         ? ["ok", `${accounts.length} ${accounts.length > 1 ? "Konten" : "Konto"} verbunden`]
         : ["todo", "Nicht verbunden"];
   const settings = getSettings(db());
-  const rules = db().prepare("SELECT id, pattern, action, category, source FROM mail_rules ORDER BY id DESC").all() as Parameters<typeof RuleList>[0]["rules"];
+  const rules = plainRows<Parameters<typeof RuleList>[0]["rules"][number]>(
+    db().prepare("SELECT id, pattern, action, category, source FROM mail_rules ORDER BY id DESC").all(),
+  );
   const [sState, sStatus] = providerState("spotify", Boolean(e.SPOTIFY_CLIENT_ID));
   const simple = (missing: unknown): [State, string] => (demo ? ["ok", "Demo"] : missing ? ["off", "Nicht eingerichtet"] : ["ok", "Aktiv"]);
   const [uState, uStatus] = simple(untis.missingConfig());

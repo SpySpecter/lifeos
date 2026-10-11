@@ -107,6 +107,14 @@ const MIGRATIONS: string[] = [
 
 export type DB = DatabaseSync;
 
+/**
+ * node:sqlite liefert Zeilen als Objekte ohne Prototyp. React lehnt solche Objekte als Props für Client-Komponenten ab,
+ * daher alles, was in die UI geht, hierdurch schicken.
+ */
+export function plainRows<T>(rows: unknown[]): T[] {
+  return rows.map((r) => ({ ...(r as object) }) as T);
+}
+
 export function openDatabase(file: string): DB {
   if (file !== ":memory:") mkdirSync(path.dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
