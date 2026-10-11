@@ -99,9 +99,10 @@ Manuell auslösen: Knopf „Jetzt sortieren“ im Widget oder `sudo systemctl st
 
 ## 5. GitHub
 
-1. [github.com/settings/personal-access-tokens](https://github.com/settings/personal-access-tokens) → *Generate new token* (Fine-grained).
-2. *Repository access*: **All repositories** (oder nur ausgewählte), *Permissions*: **Contents: Read-only**, **Metadata: Read-only**, **Pull requests: Read-only**, **Commit statuses: Read-only**.
-3. Ablaufdatum z. B. 1 Jahr, Token als `GITHUB_TOKEN` in die `.env`.
+1. Vorausgefüllt öffnen (Name, 1 Jahr Laufzeit, nur Leserechte – `<user>` ersetzen):
+   `https://github.com/settings/personal-access-tokens/new?name=LifeOS+Dashboard&target_name=<user>&expires_in=366&contents=read&pull_requests=read&statuses=read&actions=read`
+2. *Repository access*: **All repositories** (lässt sich nicht vorausfüllen; nötig, damit private Repos mit CI-Status erscheinen). Permissions: **Contents, Pull requests, Commit statuses, Actions** – jeweils Read-only (Metadata kommt automatisch).
+3. Token als `GITHUB_TOKEN` in die `.env`, dann `sudo docker compose up -d --no-build`.
 
 ---
 
