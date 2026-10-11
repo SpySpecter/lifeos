@@ -1,5 +1,6 @@
 version: 2
 updates:
+  # Major-Updates (z. B. TypeScript, ESLint, Next) bewusst manuell – sie brauchen meist Code-Anpassungen.
   - package-ecosystem: npm
     directory: /
     schedule:
@@ -7,11 +8,18 @@ updates:
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+  # Node nur auf LTS-Linien (gerade Hauptversionen) – Major-Wechsel manuell.
   - package-ecosystem: docker
     directory: /
     schedule:
       interval: monthly
+    ignore:
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]
