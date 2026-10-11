@@ -139,6 +139,8 @@ curl -X POST https://lifeos.<tailnet>/api/ingest/health \
 
 Safari → `https://lifeos.<tailnet>` → Teilen → **Zum Home-Bildschirm**. Für den Wetter-Standort einmal oben im Wetter-Widget auf *Standort* tippen und erlauben.
 
+**Habit-Erinnerungen (Push):** LifeOS vom Home-Bildschirm öffnen → *Gewohnheiten* → *Erinnerungen* → **Mitteilungen aktivieren** und erlauben (iOS 16.4 oder neuer; in Safari selbst bietet iOS das nicht an). Danach bei einer Gewohnheit über den Stift eine Uhrzeit setzen. Ist sie zu dieser Zeit noch offen, kommt eine Mitteilung – höchstens eine pro Tag und Gewohnheit. Die Nachrichten laufen über Apples Push-Dienst und kommen auch an, wenn Tailscale auf dem iPhone gerade aus ist; zum Öffnen der App braucht es Tailscale wie immer. Die nötigen VAPID-Schlüssel erzeugt LifeOS selbst und speichert sie verschlüsselt in der Datenbank – in der `.env` ist nichts einzutragen.
+
 ---
 
 ## Betrieb

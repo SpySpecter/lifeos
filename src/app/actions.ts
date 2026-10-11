@@ -5,7 +5,9 @@ import { z } from "zod";
 import { invalidate } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
-import { addHabit, archiveHabit, deleteHabit, restoreHabit, toggleHabit } from "@/lib/habits";
+import { isSingleEmoji, suggestEmoji } from "@/lib/emoji";
+import { addHabit, archiveHabit, deleteHabit, restoreHabit, toggleHabit, updateHabit } from "@/lib/habits";
+import { deleteSubscription, saveSubscription, sendToAll } from "@/lib/push";
 import { METRIC_KEYS, parseLooseNumber, upsertHealth, type HealthValues } from "@/lib/health";
 import { today } from "@/lib/time";
 import { deleteToken } from "@/lib/tokens";
@@ -26,15 +28,45 @@ export type FormState = { ok: boolean; message: string } | null;
 
 const habitSchema = z.object({
   name: z.string().trim().min(1, "Name fehlt").max(60, "Maximal 60 Zeichen"),
-  emoji: z.string().trim().max(8).default("✅"),
+  emoji: z
+    .string()
+    .trim()
+    .refine((v) => v === "" || isSingleEmoji(v), "Bitte genau ein Emoji wählen"),
+  remindAt: z
+    .string()
+    .trim()
+    .regex(/^(|([01]\d|2[0-3]):[0-5]\d)$/, "Uhrzeit im Format HH:MM"),
 });
 
+function parseHabitForm(
+  formData: FormData,
+): { error: string } | { habit: { name: string; emoji: string; remindAt: string | null } } {
+  const parsed = habitSchema.safeParse({
+    name: formData.get("name") ?? "",
+    emoji: formData.get("emoji") ?? "",
+    remindAt: formData.get("remindAt") ?? "",
+  });
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Ungültige Eingabe" };
+  const { name, emoji, remindAt } = parsed.data;
+  return { habit: { name, emoji: emoji || suggestEmoji(name) || "✅", remindAt: remindAt || null } };
+}
+
 export async function addHabitAction(_prev: FormState, formData: FormData): Promise<FormState> {
-  const parsed = habitSchema.safeParse({ name: formData.get("name"), emoji: formData.get("emoji") || "✅" });
-  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
-  addHabit(db(), parsed.data.name, parsed.data.emoji || "✅");
+  const p = parseHabitForm(formData);
+  if ("error" in p) return { ok: false, message: p.error };
+  addHabit(db(), p.habit.name, p.habit.emoji, p.habit.remindAt);
   revalidatePath("/", "layout");
-  return { ok: true, message: `„${parsed.data.name}“ angelegt` };
+  return { ok: true, message: `„${p.habit.name}“ angelegt${p.habit.remindAt ? ` · Erinnerung um ${p.habit.remindAt}` : ""}` };
+}
+
+export async function updateHabitAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const habitId = id.safeParse(Number(formData.get("id")));
+  const p = parseHabitForm(formData);
+  if (!habitId.success) return { ok: false, message: "Ungültige Gewohnheit" };
+  if ("error" in p) return { ok: false, message: p.error };
+  updateHabit(db(), habitId.data, p.habit);
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Gespeichert" };
 }
 
 export async function archiveHabitAction(habitId: number) {
@@ -198,4 +230,32 @@ export async function saveMailProfileAction(_prev: FormState, formData: FormData
   setSetting(db(), "mailProfile", text.data);
   revalidatePath("/settings");
   return { ok: true, message: `Gespeichert (${getSettings(db()).mailProfile.length} Zeichen)` };
+}
+
+const pushSubscription = z.object({
+  endpoint: z.string().url().max(1000),
+  keys: z.object({ p256dh: z.string().min(1).max(200), auth: z.string().min(1).max(100) }),
+});
+
+export async function savePushSubscriptionAction(sub: unknown, device: string): Promise<FormState> {
+  if (isDemo()) return { ok: false, message: "Im Demo-Modus deaktiviert" };
+  const parsed = pushSubscription.safeParse(sub);
+  if (!parsed.success) return { ok: false, message: "Ungültiges Push-Abo" };
+  try {
+    saveSubscription(db(), parsed.data, device.slice(0, 80) || null);
+    return { ok: true, message: "Mitteilungen aktiv" };
+  } catch (err) {
+    return { ok: false, message: (err as Error).message };
+  }
+}
+
+export async function deletePushSubscriptionAction(endpoint: string) {
+  deleteSubscription(db(), z.string().max(1000).parse(endpoint));
+}
+
+export async function sendTestPushAction(): Promise<FormState> {
+  if (isDemo()) return { ok: false, message: "Im Demo-Modus deaktiviert" };
+  const r = await sendToAll(db(), { title: "🔔 LifeOS", body: "Mitteilungen funktionieren. So sehen deine Erinnerungen aus.", url: "/habits", tag: "test" });
+  if (!r.sent) return { ok: false, message: r.errors[0] ? `Senden fehlgeschlagen: ${r.errors[0]}` : "Kein Gerät registriert" };
+  return { ok: true, message: `An ${r.sent} ${r.sent === 1 ? "Gerät" : "Geräte"} gesendet` };
 }

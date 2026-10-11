@@ -26,7 +26,7 @@ Runs 24/7 on a 5 € VPS and is reachable **only inside my Tailscale network**.
 | 🤖 **Mail assistant** | Gmail + OpenAI (`gpt-6-luna`) | Twice-daily triage of all connected inboxes: labels, archive, trash (recoverable). Hard safety rules + learned sender rules run before the model; uncertain mails wait for a one-tap decision; every action can be undone. Monthly cost cap. One-click "empty inbox" archives everything under a label |
 | ✉️ **Inbox & Drive** | Gmail, Google Drive | Multiple Google accounts, unread per account, latest unread mails, recently edited files |
 | 🌦 **Weather** | Open-Meteo | Uses the browser's location (rounded to ~1 km), hourly + 5-day forecast |
-| ✅ **Habits** | local SQLite | Check off with optimistic UI, streaks, 16-week heatmap, archive/restore/delete |
+| ✅ **Habits** | local SQLite + Web Push | Check off with optimistic UI, streaks, 16-week heatmap, emoji picker with suggestions, archive/restore/delete, per-habit reminders as push notifications (iPhone home-screen app, iOS 16.4+) |
 | ❤️ **Health** | iPhone Shortcut → Apple Health | Daily automation posts steps, sleep, workouts, energy, resting HR; manual entry; 14/30/90-day charts |
 | 🧑‍💻 **GitHub** | GraphQL API | Contribution heatmap, recently pushed repos with CI status, open PRs |
 | 🎵 **Music** | Spotify Web API | Now playing, recently played, top artists (PKCE, dev-mode-compatible endpoints only) |

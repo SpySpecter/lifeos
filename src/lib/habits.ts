@@ -5,6 +5,8 @@ export type Habit = {
   id: number;
   name: string;
   emoji: string;
+  /** Erinnerungszeit 'HH:MM' (APP_TZ) oder null */
+  remindAt: string | null;
   doneToday: boolean;
   streak: number;
   /** Erledigt-Status der letzten `historyDays` Tage, älteste zuerst. */
@@ -13,8 +15,8 @@ export type Habit = {
 
 export function listHabits(db: DB, day: string, historyDays = 7): Habit[] {
   const habits = db
-    .prepare("SELECT id, name, emoji FROM habits WHERE archived = 0 ORDER BY position, id")
-    .all() as { id: number; name: string; emoji: string }[];
+    .prepare("SELECT id, name, emoji, remind_at AS remindAt FROM habits WHERE archived = 0 ORDER BY position, id")
+    .all() as { id: number; name: string; emoji: string; remindAt: string | null }[];
   if (!habits.length) return [];
 
   const from = addDays(day, -370);
@@ -61,12 +63,19 @@ export function toggleHabit(db: DB, habitId: number, day: string): boolean {
   return true;
 }
 
-export function addHabit(db: DB, name: string, emoji: string): number {
+export function addHabit(db: DB, name: string, emoji: string, remindAt: string | null = null): number {
   const { pos } = db.prepare("SELECT COALESCE(MAX(position), 0) + 1 AS pos FROM habits").get() as { pos: number };
   const res = db
-    .prepare("INSERT INTO habits (name, emoji, position, created_at) VALUES (?, ?, ?, ?)")
-    .run(name, emoji, pos, Date.now());
+    .prepare("INSERT INTO habits (name, emoji, remind_at, position, created_at) VALUES (?, ?, ?, ?, ?)")
+    .run(name, emoji, remindAt, pos, Date.now());
   return Number(res.lastInsertRowid);
+}
+
+export function updateHabit(db: DB, habitId: number, h: { name: string; emoji: string; remindAt: string | null }): void {
+  const before = db.prepare("SELECT remind_at AS remindAt FROM habits WHERE id = ?").get(habitId) as { remindAt: string | null } | undefined;
+  db.prepare("UPDATE habits SET name = ?, emoji = ?, remind_at = ? WHERE id = ?").run(h.name, h.emoji, h.remindAt, habitId);
+  // Neue Uhrzeit → die Erinnerung darf heute noch einmal kommen
+  if (before && before.remindAt !== h.remindAt) db.prepare("DELETE FROM habit_reminders_sent WHERE habit_id = ?").run(habitId);
 }
 
 export function archiveHabit(db: DB, habitId: number): void {

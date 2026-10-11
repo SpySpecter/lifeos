@@ -103,6 +103,22 @@ const MIGRATIONS: string[] = [
     cost_usd      REAL NOT NULL
   );
   `,
+  `
+  ALTER TABLE habits ADD COLUMN remind_at TEXT; -- 'HH:MM' in APP_TZ, NULL = keine Erinnerung
+  CREATE TABLE push_subscriptions (
+    endpoint   TEXT PRIMARY KEY,
+    p256dh     TEXT NOT NULL,
+    auth       TEXT NOT NULL,
+    device     TEXT,
+    created_at INTEGER NOT NULL,
+    last_ok_at INTEGER
+  );
+  CREATE TABLE habit_reminders_sent (
+    habit_id INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+    day      TEXT NOT NULL,
+    PRIMARY KEY (habit_id, day)
+  );
+  `,
 ];
 
 export type DB = DatabaseSync;
