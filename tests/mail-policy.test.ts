@@ -77,6 +77,9 @@ describe("applyPolicy (Sicherheitsgrenzen für KI-Vorschläge)", () => {
   it("archiviert statt zu löschen, wenn die Kategorie nicht löschbar ist", () => {
     expect(v("benachrichtigung", "trash", 0.99)).toMatchObject({ action: "archive", status: "done" });
   });
+  it("Newsletter werden nie gelöscht, nur archiviert", () => {
+    expect(v("newsletter", "trash", 0.99)).toMatchObject({ action: "archive", status: "done" });
+  });
   it("unsichere Fälle landen im Widget", () => {
     expect(v("newsletter", "archive", 0.5)).toMatchObject({ status: "pending" });
     expect(v("newsletter", "archive", 0.65)).toMatchObject({ status: "pending" });
@@ -121,5 +124,23 @@ describe("robuste Hilfsfunktionen", () => {
     expect(isRateLimit(429, "")).toBe(true);
     expect(isRateLimit(403, "Quota exceeded for quota metric")).toBe(true);
     expect(isRateLimit(403, "Insufficient Permission")).toBe(false);
+  });
+});
+
+import { financeReadyToArchive } from "@/lib/mail/policy";
+
+describe("Finanzen nach 14 Tagen archivieren", () => {
+  const now = new Date("2026-10-20T12:00:00Z").getTime();
+  const day = 86_400_000;
+  it("archiviert alte Rechnungen", () => {
+    expect(financeReadyToArchive({ subject: "Ihre Rechnung", snippet: "", date: now - 15 * day }, now)).toBe(true);
+  });
+  it("lässt neue Rechnungen im Posteingang", () => {
+    expect(financeReadyToArchive({ subject: "Ihre Rechnung", snippet: "", date: now - 3 * day }, now)).toBe(false);
+  });
+  it("lässt Mahnungen und Zahlungsprobleme immer im Posteingang", () => {
+    for (const subject of ["1. Mahnung", "Zahlung fehlgeschlagen", "Payment failed for your subscription", "Aktion erforderlich: Konto"]) {
+      expect(financeReadyToArchive({ subject, snippet: "", date: now - 60 * day }, now)).toBe(false);
+    }
   });
 });

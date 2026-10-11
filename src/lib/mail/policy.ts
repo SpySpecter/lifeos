@@ -35,8 +35,16 @@ export const CATEGORY_LABEL: Record<Category, string> = {
 
 /** Kategorien, die nie automatisch aus dem Posteingang verschwinden. */
 const PROTECTED: Category[] = ["wichtig", "schule", "persoenlich", "finanzen", "konto"];
-/** Nur diese Kategorien dürfen automatisch in den Papierkorb. */
-const TRASHABLE: Category[] = ["werbung", "spam", "social", "newsletter"];
+/** Nur diese Kategorien dürfen automatisch in den Papierkorb (Newsletter werden archiviert, nie gelöscht). */
+const TRASHABLE: Category[] = ["werbung", "spam", "social"];
+
+/** Finanz-Mails werden nach dieser Zeit archiviert (Mahnungen u. Ä. ausgenommen). */
+export const FINANCE_ARCHIVE_DAYS = 14;
+const FINANCE_URGENT = /(mahnung|zahlungserinnerung|überfällig|fehlgeschlagen|abgelehnt|rücklastschrift|payment failed|declined|overdue|action required|aktion erforderlich|frist)/i;
+
+export function financeReadyToArchive(m: { subject: string; snippet: string; date: number }, now = Date.now()): boolean {
+  return now - m.date > FINANCE_ARCHIVE_DAYS * 86_400_000 && !FINANCE_URGENT.test(`${m.subject} ${m.snippet}`);
+}
 
 export const THRESHOLDS = { trash: 0.85, archive: 0.7, ask: 0.6 };
 

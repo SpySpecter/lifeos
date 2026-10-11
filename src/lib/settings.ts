@@ -11,7 +11,7 @@ export type Settings = {
 
 export const DEFAULT_MAIL_PROFILE = `Ich bin Schüler in der Oberstufe (Brandenburg, LK Informatik) und programmiere viel (GitHub, KI-Tools, eigener VPS).
 Wichtig (immer im Posteingang lassen): Schule, Lehrer, Untis, Behörden, Bank/Rechnungen/Bestellungen, Sicherheitswarnungen meiner Konten (neues Gerät, Passwort, 2FA), Bewerbungen, persönliche Mails von echten Menschen.
-Archivieren statt löschen: GitHub/Entwickler-Benachrichtigungen, Versandbestätigungen, Newsletter, die ich manchmal lese.
+Archivieren statt löschen: GitHub/Entwickler-Benachrichtigungen, Versandbestätigungen, alle Newsletter, und Produkt-News von Tools, die ich nutze (Claude/Anthropic, OpenAI/ChatGPT, TryHackMe, GitHub) – auch wenn sie werblich sind.
 Löschen: Werbung, Rabattaktionen, Gewinnspiele, Social-Media-Benachrichtigungen, Newsletter, die ich nie lese, offensichtlicher Spam.`;
 
 export function defaultSettings(): Settings {

@@ -6,6 +6,7 @@ import { BudgetExceededError, monthSpendUsd, structuredCompletion } from "../ope
 import { getSettings } from "../settings";
 import { ensureLabels, getMeta, listInbox, modify, trash, untrash } from "./gmail";
 import {
+  financeReadyToArchive,
   AI_SCHEMA,
   type AiVerdict,
   aiInput,
@@ -119,6 +120,21 @@ async function execute(token: string, labels: Map<Category, string>, id: string,
   if (action === "trash") await trash(token, id);
 }
 
+/** Rechnungen/Bestellungen, die schon länger im Posteingang liegen, mit Label ins Archiv verschieben. */
+async function archiveOldFinance(db: DB, account: string, token: string): Promise<number> {
+  const rows = db
+    .prepare("SELECT id, subject, snippet, date FROM mail_items WHERE account = ? AND status = 'done' AND action = 'keep' AND category = 'finanzen'")
+    .all(account) as { id: string; subject: string; snippet: string; date: number }[];
+  const due = rows.filter((r) => financeReadyToArchive(r)).map((r) => r.id);
+  if (!due.length) return 0;
+  await modify(token, due, [], ["INBOX"]);
+  const upd = db.prepare(
+    "UPDATE mail_items SET action = 'archive', reason = 'Finanzen älter als 14 Tage', source = 'regel', processed_at = ? WHERE account = ? AND id = ?",
+  );
+  for (const id of due) upd.run(Date.now(), account, id);
+  return due.length;
+}
+
 async function executeGroup(token: string, labels: Map<Category, string>, ids: string[], action: MailAction, category: Category | null) {
   const label = category ? labels.get(category) : undefined;
   await modify(token, ids, label ? [label] : [], action === "archive" ? ["INBOX"] : []);
@@ -152,6 +168,7 @@ export async function runTriage(db: DB, trigger: "timer" | "manuell"): Promise<R
       const seen = new Set(
         (db.prepare("SELECT id FROM mail_items WHERE account = ?").all(account) as { id: string }[]).map((r) => r.id),
       );
+      summary.archived += await archiveOldFinance(db, account, token);
       const fresh = ids.filter((id) => !seen.has(id));
       if (!fresh.length) continue;
 
