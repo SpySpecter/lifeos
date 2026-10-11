@@ -37,12 +37,15 @@ async function call<T>(token: string, path: string, init: RequestInit = {}, dela
   }
 }
 
-/** IDs im Posteingang (ohne markierte), neueste zuerst. */
-export async function listInbox(token: string, max: number): Promise<string[]> {
+/** IDs im Posteingang (standardmäßig ohne markierte), neueste zuerst. */
+export async function listInbox(token: string, max: number, { includeStarred = false } = {}): Promise<string[]> {
   const ids: string[] = [];
   let pageToken: string | undefined;
   do {
-    const q = new URLSearchParams({ q: "in:inbox -is:starred", maxResults: String(Math.min(100, max - ids.length)) });
+    const q = new URLSearchParams({
+      q: includeStarred ? "in:inbox" : "in:inbox -is:starred",
+      maxResults: String(Math.min(500, max - ids.length)),
+    });
     if (pageToken) q.set("pageToken", pageToken);
     const res = await call<{ messages?: { id: string }[]; nextPageToken?: string }>(token, `/messages?${q}`);
     ids.push(...(res.messages ?? []).map((m) => m.id));
@@ -75,32 +78,39 @@ export async function getMeta(token: string, id: string): Promise<MailMeta> {
   };
 }
 
-/** Label-IDs für "LifeOS/<Kategorie>", fehlende werden angelegt. */
-export async function ensureLabels(token: string): Promise<Map<Category, string>> {
+async function labelIds(token: string, names: string[]): Promise<Map<string, string>> {
   const existing = await call<{ labels: { id: string; name: string }[] }>(token, "/labels");
   const byName = new Map(existing.labels.map((l) => [l.name, l.id]));
-  const out = new Map<Category, string>();
-  for (const [cat, label] of Object.entries(CATEGORY_LABEL) as [Category, string][]) {
-    const name = `LifeOS/${label}`;
-    let id = byName.get(name);
-    if (!id) {
-      const created = await call<{ id: string }>(token, "/labels", {
-        method: "POST",
-        body: JSON.stringify({ name, labelListVisibility: "labelShow", messageListVisibility: "show" }),
-      });
-      id = created.id;
-    }
-    out.set(cat, id);
+  for (const name of names) {
+    if (byName.has(name)) continue;
+    const created = await call<{ id: string }>(token, "/labels", {
+      method: "POST",
+      body: JSON.stringify({ name, labelListVisibility: "labelShow", messageListVisibility: "show" }),
+    });
+    byName.set(name, created.id);
   }
-  return out;
+  return byName;
+}
+
+/** Label-IDs für "LifeOS/<Kategorie>", fehlende werden angelegt. */
+export async function ensureLabels(token: string): Promise<Map<Category, string>> {
+  const entries = Object.entries(CATEGORY_LABEL) as [Category, string][];
+  const ids = await labelIds(token, entries.map(([, label]) => `LifeOS/${label}`));
+  return new Map(entries.map(([cat, label]) => [cat, ids.get(`LifeOS/${label}`)!]));
+}
+
+/** ID eines einzelnen Labels, wird bei Bedarf angelegt. */
+export async function ensureLabel(token: string, name: string): Promise<string> {
+  return (await labelIds(token, [name])).get(name)!;
 }
 
 export async function modify(token: string, ids: string[], add: string[], remove: string[]): Promise<void> {
   if (!ids.length || (!add.length && !remove.length)) return;
-  for (let i = 0; i < ids.length; i += 500) {
+  // batchModify erlaubt bis zu 1000 IDs pro Aufruf
+  for (let i = 0; i < ids.length; i += 1000) {
     await call(token, "/messages/batchModify", {
       method: "POST",
-      body: JSON.stringify({ ids: ids.slice(i, i + 500), addLabelIds: add, removeLabelIds: remove }),
+      body: JSON.stringify({ ids: ids.slice(i, i + 1000), addLabelIds: add, removeLabelIds: remove }),
     });
   }
 }

@@ -1,5 +1,5 @@
 import "server-only";
-import { WebUntis, type Lesson } from "webuntis";
+import { type Exam, type Lesson, WebUntis } from "webuntis";
 import { env } from "@/lib/env";
 import { addDays, today } from "@/lib/time";
 import type { Integration } from "./core";
@@ -77,6 +77,71 @@ export function buildWeek(lessons: SchoolLesson[], from: string, days: number): 
   };
 }
 
+/** Mit Untis anmelden, `fn` ausführen, immer wieder abmelden. */
+export async function withUntis<T>(fn: (s: WebUntis) => Promise<T>): Promise<T> {
+  const e = env();
+  const session = new WebUntis(e.UNTIS_SCHOOL!, e.UNTIS_USER!, e.UNTIS_PASSWORD!, e.UNTIS_SERVER!, "lifeos");
+  await session.login();
+  try {
+    return await fn(session);
+  } finally {
+    await session.logout().catch(() => undefined);
+  }
+}
+
+const rangeDates = (from: string, to: string) => [new Date(`${from}T00:00:00`), new Date(`${to}T23:59:59`)] as const;
+
+/** Eigene Stunden im Zeitraum (YYYY-MM-DD, inklusive), Doppelstunden zusammengefasst. */
+export async function fetchLessons(from: string, to: string): Promise<SchoolLesson[]> {
+  const [start, end] = rangeDates(from, to);
+  return mergeBlocks((await withUntis((s) => s.getOwnTimetableForRange(start, end))).map(mapLesson));
+}
+
+export type SchoolExam = { day: string; start: string; end: string; subject: string; type: string; name: string; rooms: string[]; text: string | null };
+
+export function mapExam(x: Exam): SchoolExam {
+  return {
+    day: untisDay(x.examDate),
+    start: untisTime(x.startTime),
+    end: untisTime(x.endTime),
+    subject: x.subject,
+    type: x.examType,
+    name: x.name,
+    rooms: x.rooms ?? [],
+    text: x.text?.trim() || null,
+  };
+}
+
+export async function fetchExams(from: string, to: string): Promise<SchoolExam[]> {
+  const [start, end] = rangeDates(from, to);
+  return (await withUntis((s) => s.getExamsForRange(start, end))).map(mapExam).sort((a, b) => (a.day + a.start).localeCompare(b.day + b.start));
+}
+
+export type SchoolHomework = { assigned: string; due: string; subject: string | null; text: string; completed: boolean };
+
+type HomeworkResponse = {
+  homeworks?: { lessonId: number; date: number; dueDate: number; text: string; remark?: string; completed: boolean }[];
+  lessons?: { id: number; subject?: string }[];
+};
+
+export function mapHomework(res: HomeworkResponse): SchoolHomework[] {
+  const subjects = new Map((res.lessons ?? []).map((l) => [l.id, l.subject ?? null]));
+  return (res.homeworks ?? [])
+    .map((h) => ({
+      assigned: untisDay(h.date),
+      due: untisDay(h.dueDate),
+      subject: subjects.get(h.lessonId) ?? null,
+      text: [h.text, h.remark].filter((t) => t && t.trim()).join(" – "),
+      completed: Boolean(h.completed),
+    }))
+    .sort((a, b) => a.due.localeCompare(b.due));
+}
+
+export async function fetchHomework(from: string, to: string): Promise<SchoolHomework[]> {
+  const [start, end] = rangeDates(from, to);
+  return mapHomework((await withUntis((s) => s.getHomeWorkAndLessons(start, end))) as unknown as HomeworkResponse);
+}
+
 export const untis: Integration<SchoolWeek> = {
   id: "untis",
   ttlSeconds: 15 * 60,
@@ -87,18 +152,8 @@ export const untis: Integration<SchoolWeek> = {
       : { hint: "UNTIS_SERVER, UNTIS_SCHOOL, UNTIS_USER und UNTIS_PASSWORD in .env eintragen", connectHref: "/settings#untis" };
   },
   async fetch() {
-    const e = env();
-    const session = new WebUntis(e.UNTIS_SCHOOL!, e.UNTIS_USER!, e.UNTIS_PASSWORD!, e.UNTIS_SERVER!, "lifeos");
-    await session.login();
-    try {
-      const from = today(e.APP_TZ);
-      const start = new Date(`${from}T00:00:00`);
-      const end = new Date(`${addDays(from, 6)}T23:59:59`);
-      const lessons = await session.getOwnTimetableForRange(start, end);
-      return buildWeek(lessons.map(mapLesson), from, 7);
-    } finally {
-      await session.logout().catch(() => undefined);
-    }
+    const from = today(env().APP_TZ);
+    return buildWeek(await fetchLessons(from, addDays(from, 6)), from, 7);
   },
   mock() {
     const d = today();

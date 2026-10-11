@@ -1,5 +1,7 @@
 import "server-only";
 import { XMLParser } from "fast-xml-parser";
+import { cached } from "@/lib/cache";
+import { db } from "@/lib/db";
 import { localKeywords, newsFeeds } from "@/lib/env";
 import { IntegrationError, type Integration } from "./core";
 
@@ -11,6 +13,8 @@ export type NewsItem = {
   category: string;
   /** Meldung erwähnt einen Ort aus NEWS_LOCAL_KEYWORDS */
   local?: boolean;
+  /** Vorschaubild (nur https) */
+  image?: string;
 };
 
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@" });
@@ -29,18 +33,64 @@ const decode = (s: string) =>
     .replace(/&gt;/g, ">")
     .replace(/&amp;/g, "&");
 
+/** Nur https-Bild-URLs übernehmen (kein http/javascript/data). */
+export function safeImageUrl(raw: string | undefined | null): string | undefined {
+  if (!raw) return undefined;
+  try {
+    const u = new URL(decode(raw.trim()));
+    if (u.protocol !== "https:") return undefined;
+    // Tagesschau liefert 1920 px breite Bilder – für das Vorschaubild reicht ein Bruchteil
+    if (u.hostname === "images.tagesschau.de" && u.searchParams.has("width")) u.searchParams.set("width", "320");
+    return u.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+const firstImg = (html: string): string | undefined => {
+  const m = decode(html).match(/<img\b[^>]*?\ssrc=["']([^"']+)["']/i);
+  return m ? safeImageUrl(m[1]) : undefined;
+};
+
+/** Bild aus Media-RSS, Enclosure oder dem ersten <img> im HTML-Inhalt. */
+function imageOf(node: Node): string | undefined {
+  for (const key of ["media:thumbnail", "media:content"]) {
+    for (const m of asArray(node[key] as Node[] | Node | undefined)) {
+      const type = String(m["@type"] ?? m["@medium"] ?? "image");
+      const url = safeImageUrl(m["@url"] as string | undefined);
+      if (url && /image/.test(type)) return url;
+    }
+  }
+  for (const e of asArray(node.enclosure as Node[] | Node | undefined)) {
+    const url = safeImageUrl(e["@url"] as string | undefined);
+    if (url && String(e["@type"] ?? "").startsWith("image/")) return url;
+  }
+  for (const key of ["content:encoded", "description", "content", "summary"]) {
+    const img = firstImg(text(node[key]));
+    if (img) return img;
+  }
+  return undefined;
+}
+
+const withImage = (item: NewsItem, image: string | undefined): NewsItem => (image ? { ...item, image } : item);
+
 /** Unterstützt RSS 2.0 (Tagesschau, rbb24) und Atom (heise, The Verge). */
 export function parseFeed(xml: string, source: string, category = "Allgemein"): NewsItem[] {
   const doc = parser.parse(xml) as Node;
   const rss = (doc.rss as Node | undefined)?.channel as Node | undefined;
   if (rss) {
-    return asArray(rss.item as Node[]).map((item) => ({
-      title: decode(text(item.title).trim()),
-      link: text(item.link).trim(),
-      published: item.pubDate ? new Date(text(item.pubDate)).toISOString() : null,
-      source,
-      category,
-    }));
+    return asArray(rss.item as Node[]).map((item) =>
+      withImage(
+        {
+          title: decode(text(item.title).trim()),
+          link: text(item.link).trim(),
+          published: item.pubDate ? new Date(text(item.pubDate)).toISOString() : null,
+          source,
+          category,
+        },
+        imageOf(item),
+      ),
+    );
   }
   const feed = doc.feed as Node | undefined;
   if (feed) {
@@ -48,16 +98,89 @@ export function parseFeed(xml: string, source: string, category = "Allgemein"): 
       const links = asArray(entry.link as Node[]);
       const link = links.find((l) => !l["@rel"] || l["@rel"] === "alternate") ?? links[0];
       const date = entry.published ?? entry.updated;
-      return {
-        title: decode(text(entry.title).trim()),
-        link: link ? String(link["@href"] ?? "") : "",
-        published: date ? new Date(text(date)).toISOString() : null,
-        source,
-        category,
-      };
+      return withImage(
+        {
+          title: decode(text(entry.title).trim()),
+          link: link ? String(link["@href"] ?? "") : "",
+          published: date ? new Date(text(date)).toISOString() : null,
+          source,
+          category,
+        },
+        imageOf(entry),
+      );
     });
   }
   throw new IntegrationError(`${source}: unbekanntes Feed-Format`);
+}
+
+/** og:image / twitter:image aus dem <head> einer Artikelseite. */
+export function extractOgImage(html: string): string | undefined {
+  for (const tag of html.match(/<meta\b[^>]*>/gi) ?? []) {
+    if (!/(property|name)=["'](og:image|og:image:url|twitter:image)["']/i.test(tag)) continue;
+    const m = tag.match(/content=["']([^"']+)["']/i);
+    const url = m ? safeImageUrl(m[1]) : undefined;
+    if (url) return url;
+  }
+  return undefined;
+}
+
+/** Nur öffentliche https-Seiten abrufen (keine IP-Adressen, kein localhost/Tailnet). */
+export function fetchableArticle(link: string): boolean {
+  try {
+    const u = new URL(link);
+    return (
+      u.protocol === "https:" &&
+      u.hostname.includes(".") &&
+      !/^[\d.]+$/.test(u.hostname) &&
+      !u.hostname.includes(":") &&
+      !/(^|\.)(localhost|local|internal|ts\.net)$/i.test(u.hostname)
+    );
+  } catch {
+    return false;
+  }
+}
+
+const OG_MAX_BYTES = 150_000;
+
+async function fetchOgImage(link: string): Promise<string | null> {
+  const res = await fetch(link, {
+    signal: AbortSignal.timeout(4000),
+    cache: "no-store",
+    redirect: "follow",
+    headers: { "User-Agent": "Mozilla/5.0 (LifeOS dashboard; +https://github.com/SpySpecter/lifeos)", Accept: "text/html" },
+  });
+  if (!res.ok || !res.body) return null;
+  // nur den Anfang der Seite lesen – og:image steht im <head>
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let html = "";
+  while (html.length < OG_MAX_BYTES) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    html += decoder.decode(value, { stream: true });
+    if (/<\/head>/i.test(html)) break;
+  }
+  await reader.cancel().catch(() => undefined);
+  return extractOgImage(html) ?? null;
+}
+
+/** Ergänzt fehlende Bilder über og:image der Artikelseite (pro Link 7 Tage gecacht, Fehler → kein Bild). */
+async function addOgImages(items: NewsItem[], max = 40, parallel = 6): Promise<NewsItem[]> {
+  const todo = items.map((item, i) => ({ item, i })).filter(({ item }) => !item.image && fetchableArticle(item.link)).slice(0, max);
+  const out = [...items];
+  for (let k = 0; k < todo.length; k += parallel) {
+    await Promise.all(
+      todo.slice(k, k + parallel).map(async ({ item, i }) => {
+        try {
+          const hit = await cached(db(), `ogimg:${item.link}`, 7 * 86_400, () => fetchOgImage(item.link));
+          if (hit.data) out[i] = { ...item, image: hit.data };
+        } catch {
+          // kein Bild – kein Problem
+        }
+      }),
+    );
+  }
+  return out;
 }
 
 export function markLocal(items: NewsItem[], keywords: string[]): NewsItem[] {
@@ -102,27 +225,28 @@ export const news: Integration<NewsItem[]> = {
     );
     const ok = results.flatMap((r) => (r.status === "fulfilled" ? [markLocal(r.value, localKeywords())] : []));
     if (!ok.length) throw new IntegrationError("Keine Nachrichtenquelle erreichbar");
-    return mergeNews(ok, 60);
+    return addOgImages(mergeNews(ok, 60));
   },
   mock() {
     const now = Date.now();
     const at = (min: number) => new Date(now - min * 60_000).toISOString();
-    const N = (title: string, source: string, category: string, min: number, local = false): NewsItem => ({
+    const N = (title: string, source: string, category: string, min: number, local = false, img?: number): NewsItem => ({
       title,
       link: "#",
       published: at(min),
       source,
       category,
       ...(local ? { local } : {}),
+      ...(img ? { image: `/demo/news-${img}.svg` } : {}),
     });
     return [
-      N("Wandlitz: Neue Radwegverbindung nach Basdorf freigegeben", "rbb24", "Region", 15, true),
-      N("Bundestag berät über neues Klimaschutzpaket", "Tagesschau Politik", "Politik", 25),
-      N("Open-Source-KI: Neue Modelle laufen auf dem Laptop", "heise", "Tech", 40),
-      N("Transporter prallt gegen Baum – Fahrer schwer verletzt", "rbb24 Blaulicht", "Blaulicht", 55),
-      N("Bahn kündigt Ausbau im Regionalverkehr an", "Tagesschau", "Allgemein", 70),
-      N("Apple and Google agree on new AI interoperability standard", "The Verge", "Tech", 95),
-      N("Landtag Brandenburg streitet über Schulbudget", "rbb24", "Region", 130),
+      N("Wandlitz: Neue Radwegverbindung nach Basdorf freigegeben", "rbb24", "Region", 15, true, 3),
+      N("Bundestag berät über neues Klimaschutzpaket", "Tagesschau Politik", "Politik", 25, false, 1),
+      N("Open-Source-KI: Neue Modelle laufen auf dem Laptop", "heise", "Tech", 40, false, 2),
+      N("Transporter prallt gegen Baum – Fahrer schwer verletzt", "rbb24 Blaulicht", "Blaulicht", 55, false, 4),
+      N("Bahn kündigt Ausbau im Regionalverkehr an", "Tagesschau", "Allgemein", 70, false, 5),
+      N("Apple and Google agree on new AI interoperability standard", "The Verge", "Tech", 95, false, 6),
+      N("Landtag Brandenburg streitet über Schulbudget", "rbb24", "Region", 130, false, 1),
       N("Show HN: I built a self-hosted dashboard for my life", "Hacker News", "Tech", 150),
     ];
   },

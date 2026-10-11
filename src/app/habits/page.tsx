@@ -1,19 +1,20 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { ArchiveHabitButton } from "@/components/archive-habit-button";
+import { HabitActionButton } from "@/components/habit-actions";
 import { HabitForm } from "@/components/habit-form";
 import { HabitList } from "@/components/habit-list";
 import { Heatmap } from "@/components/heatmap";
 import { WidgetSkeleton } from "@/components/widget-card";
 import { currentDay, loadHabits } from "@/integrations/loaders";
 import { db } from "@/lib/db";
-import { habitHeatmap } from "@/lib/habits";
+import { habitHeatmap, listArchivedHabits } from "@/lib/habits";
 
 export const metadata: Metadata = { title: "Gewohnheiten" };
 
 async function HabitsContent() {
   const [habits, day] = await Promise.all([loadHabits(30), currentDay()]);
   const heat = habitHeatmap(db(), day, 16 * 7);
+  const archived = listArchivedHabits(db());
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr]">
       <section className="rounded-2xl bg-card p-4 ring-1 ring-foreground/8 sm:p-5">
@@ -42,16 +43,35 @@ async function HabitsContent() {
               return (
                 <li key={h.id} className="flex items-center gap-3">
                   <span aria-hidden>{h.emoji}</span>
-                  <span className="w-40 truncate">{h.name}</span>
+                  <span className="w-28 truncate sm:w-40">{h.name}</span>
                   <div className="h-1.5 flex-1 rounded-full bg-muted">
                     <div className="h-1.5 rounded-full bg-series-1" style={{ width: `${rate * 100}%` }} />
                   </div>
                   <span className="w-10 text-right text-muted-foreground tabular-nums">{Math.round(rate * 100)} %</span>
-                  <ArchiveHabitButton id={h.id} name={h.name} />
+                  <div className="flex">
+                    <HabitActionButton kind="archive" id={h.id} name={h.name} />
+                    <HabitActionButton kind="delete" id={h.id} name={h.name} />
+                  </div>
                 </li>
               );
             })}
           </ul>
+          {archived.length ? (
+            <details className="mt-4 border-t pt-3 text-sm">
+              <summary className="cursor-pointer text-muted-foreground select-none">Archiviert ({archived.length})</summary>
+              <ul className="mt-2 space-y-1">
+                {archived.map((h) => (
+                  <li key={h.id} className="flex items-center gap-3">
+                    <span aria-hidden>{h.emoji}</span>
+                    <span className="flex-1 truncate">{h.name}</span>
+                    <span className="text-xs text-muted-foreground tabular-nums">{h.checks}× erledigt</span>
+                    <HabitActionButton kind="restore" id={h.id} name={h.name} />
+                    <HabitActionButton kind="delete" id={h.id} name={h.name} />
+                  </li>
+                ))}
+              </ul>
+            </details>
+          ) : null}
         </section>
       </div>
     </div>

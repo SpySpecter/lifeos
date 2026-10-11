@@ -156,4 +156,22 @@ describe("runTriage", () => {
     const { db } = await import("@/lib/db");
     expect(monthSpendUsd(db())).toBeCloseTo((10 * 0.1 + 3 * 0.5 + 1000 * 0.1 + 200 * 0.5) / 1e6);
   });
+
+  it("Posteingang leeren archiviert alles (auch markierte) und löscht nichts", async () => {
+    const { clearInbox, CLEARED_LABEL } = await import("@/lib/mail/triage");
+    const { db } = await import("@/lib/db");
+    db().prepare("UPDATE mail_items SET status = 'pending' WHERE id = 'school'").run();
+    const before = calls.length;
+
+    const result = await clearInbox(db());
+    expect(result).toEqual({ accounts: [{ account: "luis@example.com", archived: 5 }], notes: [] });
+
+    const mine = calls.slice(before);
+    const list = mine.find((c) => c.url.includes("/messages?"))!;
+    expect(new URL(list.url).searchParams.get("q")).toBe("in:inbox");
+    const mods = mine.filter((c) => c.url.includes("batchModify")).map((c) => c.body as { ids: string[]; addLabelIds: string[]; removeLabelIds: string[] });
+    expect(mods).toEqual([{ ids: Object.keys(MAILS), addLabelIds: [`L_${CLEARED_LABEL}`], removeLabelIds: ["INBOX"] }]);
+    expect(mine.some((c) => c.url.endsWith("/trash") || c.method === "DELETE")).toBe(false);
+    expect(db().prepare("SELECT COUNT(*) AS n FROM mail_items WHERE status = 'pending'").get()).toEqual({ n: 0 });
+  });
 });

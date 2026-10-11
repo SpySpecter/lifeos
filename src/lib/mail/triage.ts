@@ -4,7 +4,7 @@ import { type DB, plainRows } from "../db";
 import { env } from "../env";
 import { BudgetExceededError, monthSpendUsd, structuredCompletion } from "../openai";
 import { getSettings } from "../settings";
-import { ensureLabels, getMeta, listInbox, modify, trash, untrash } from "./gmail";
+import { ensureLabel, ensureLabels, getMeta, listInbox, modify, trash, untrash } from "./gmail";
 import {
   financeReadyToArchive,
   AI_SCHEMA,
@@ -141,13 +141,59 @@ async function executeGroup(token: string, labels: Map<Category, string>, ids: s
   if (action === "trash") for (const id of ids) await trash(token, id);
 }
 
-export async function runTriage(db: DB, trigger: "timer" | "manuell"): Promise<RunSummary> {
+/** Startet einen Lauf in mail_runs – oder bricht ab, wenn gerade ein anderer läuft. */
+function startRun(db: DB, trigger: string): number {
   const running = db
     .prepare("SELECT id FROM mail_runs WHERE finished_at IS NULL AND started_at > ?")
     .get(Date.now() - 20 * 60_000) as { id: number } | undefined;
   if (running) throw new Error("Die Mail-Sortierung läuft bereits");
+  return Number(db.prepare("INSERT INTO mail_runs (started_at, trigger) VALUES (?, ?)").run(Date.now(), trigger).lastInsertRowid);
+}
 
-  const runId = Number(db.prepare("INSERT INTO mail_runs (started_at, trigger) VALUES (?, ?)").run(Date.now(), trigger).lastInsertRowid);
+export const CLEARED_LABEL = "LifeOS/Aufgeräumt";
+const CLEAR_MAX = 20_000;
+
+/**
+ * Leert den Posteingang aller Konten komplett (auch markierte Mails): Label "LifeOS/Aufgeräumt" dazu, INBOX weg.
+ * Nichts wird gelöscht – alles bleibt unter "Alle E-Mails" bzw. dem Label auffindbar.
+ */
+export async function clearInbox(db: DB): Promise<{ accounts: { account: string; archived: number }[]; notes: string[] }> {
+  const runId = startRun(db, "aufraeumen");
+  const result = { accounts: [] as { account: string; archived: number }[], notes: [] as string[] };
+  const summary: RunSummary = { accounts: 0, scanned: 0, kept: 0, archived: 0, trashed: 0, pending: 0, notes: result.notes };
+  try {
+    for (const account of await googleAccounts()) {
+      if (!hasScope(account, GMAIL_MODIFY)) {
+        result.notes.push(`${account}: Schreibrechte fehlen – in den Einstellungen neu verbinden`);
+        continue;
+      }
+      const token = await googleAccessToken(googleKey(account));
+      const ids = await listInbox(token, CLEAR_MAX, { includeStarred: true });
+      if (ids.length) await modify(token, ids, [await ensureLabel(token, CLEARED_LABEL)], ["INBOX"]);
+      if (ids.length === CLEAR_MAX) result.notes.push(`${account}: mehr als ${CLEAR_MAX} Mails – bitte noch einmal ausführen`);
+      // offene Entscheidungen sind damit erledigt (archiviert)
+      db.prepare(
+        "UPDATE mail_items SET status = 'done', action = 'archive', reason = 'Posteingang geleert', processed_at = ? WHERE account = ? AND status = 'pending'",
+      ).run(Date.now(), account);
+      result.accounts.push({ account, archived: ids.length });
+      summary.accounts++;
+      summary.archived += ids.length;
+    }
+    db.prepare("UPDATE mail_runs SET finished_at = ?, summary = ? WHERE id = ?").run(Date.now(), JSON.stringify(summary), runId);
+    return result;
+  } catch (err) {
+    db.prepare("UPDATE mail_runs SET finished_at = ?, error = ?, summary = ? WHERE id = ?").run(
+      Date.now(),
+      (err as Error).message,
+      JSON.stringify(summary),
+      runId,
+    );
+    throw err;
+  }
+}
+
+export async function runTriage(db: DB, trigger: "timer" | "manuell"): Promise<RunSummary> {
+  const runId = startRun(db, trigger);
   const summary: RunSummary = { accounts: 0, scanned: 0, kept: 0, archived: 0, trashed: 0, pending: 0, notes: [] };
 
   try {

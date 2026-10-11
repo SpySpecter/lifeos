@@ -73,6 +73,25 @@ export function archiveHabit(db: DB, habitId: number): void {
   db.prepare("UPDATE habits SET archived = 1 WHERE id = ?").run(habitId);
 }
 
+export function restoreHabit(db: DB, habitId: number): void {
+  db.prepare("UPDATE habits SET archived = 0 WHERE id = ?").run(habitId);
+}
+
+/** Endgültig löschen – die Häkchen verschwinden per ON DELETE CASCADE mit. */
+export function deleteHabit(db: DB, habitId: number): void {
+  db.prepare("DELETE FROM habits WHERE id = ?").run(habitId);
+}
+
+export function listArchivedHabits(db: DB): { id: number; name: string; emoji: string; checks: number }[] {
+  return db
+    .prepare(
+      "SELECT h.id, h.name, h.emoji, COUNT(c.day) AS checks FROM habits h LEFT JOIN habit_checks c ON c.habit_id = h.id " +
+        "WHERE h.archived = 1 GROUP BY h.id ORDER BY h.name",
+    )
+    .all()
+    .map((r) => ({ ...(r as { id: number; name: string; emoji: string; checks: number }) }));
+}
+
 /** Erledigte Tage je Habit für eine Heatmap (z. B. 12 Wochen). */
 export function habitHeatmap(db: DB, day: string, days: number): { day: string; count: number; total: number }[] {
   const { total } = db.prepare("SELECT COUNT(*) AS total FROM habits WHERE archived = 0").get() as { total: number };

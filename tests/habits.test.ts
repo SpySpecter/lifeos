@@ -1,5 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { addHabit, archiveHabit, habitHeatmap, listHabits, streak, toggleHabit } from "@/lib/habits";
+import {
+  addHabit,
+  archiveHabit,
+  deleteHabit,
+  habitHeatmap,
+  listArchivedHabits,
+  listHabits,
+  restoreHabit,
+  streak,
+  toggleHabit,
+} from "@/lib/habits";
 import { memoryDb } from "./support/db";
 
 describe("streak", () => {
@@ -45,5 +55,32 @@ describe("Habits in der Datenbank", () => {
     const heat = habitHeatmap(db, "2026-10-11", 7);
     expect(heat).toHaveLength(7);
     expect(heat.at(-1)).toEqual({ day: "2026-10-11", count: 1, total: 1 });
+  });
+});
+
+describe("Habits löschen und wiederherstellen", () => {
+  it("archiviert → wiederhergestellt erscheint wieder", () => {
+    const db = memoryDb();
+    const id = addHabit(db, "Sport", "🏃");
+    toggleHabit(db, id, "2026-10-10");
+    archiveHabit(db, id);
+    expect(listHabits(db, "2026-10-11")).toHaveLength(0);
+    expect(listArchivedHabits(db)).toEqual([{ id, name: "Sport", emoji: "🏃", checks: 1 }]);
+    restoreHabit(db, id);
+    expect(listHabits(db, "2026-10-11").map((h) => h.name)).toEqual(["Sport"]);
+    expect(listArchivedHabits(db)).toEqual([]);
+  });
+
+  it("löschen entfernt Habit und alle Häkchen", () => {
+    const db = memoryDb();
+    const keep = addHabit(db, "Lesen", "📚");
+    const gone = addHabit(db, "Zocken", "🎮");
+    toggleHabit(db, gone, "2026-10-10");
+    toggleHabit(db, gone, "2026-10-11");
+    toggleHabit(db, keep, "2026-10-11");
+    deleteHabit(db, gone);
+    expect(listHabits(db, "2026-10-11").map((h) => h.id)).toEqual([keep]);
+    expect(db.prepare("SELECT COUNT(*) AS n FROM habit_checks WHERE habit_id = ?").get(gone)).toMatchObject({ n: 0 });
+    expect(db.prepare("SELECT COUNT(*) AS n FROM habit_checks").get()).toMatchObject({ n: 1 });
   });
 });

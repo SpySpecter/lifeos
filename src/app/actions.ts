@@ -5,12 +5,12 @@ import { z } from "zod";
 import { invalidate } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
-import { addHabit, archiveHabit, toggleHabit } from "@/lib/habits";
+import { addHabit, archiveHabit, deleteHabit, restoreHabit, toggleHabit } from "@/lib/habits";
 import { METRIC_KEYS, parseLooseNumber, upsertHealth, type HealthValues } from "@/lib/health";
 import { today } from "@/lib/time";
 import { deleteToken } from "@/lib/tokens";
 import { isDemo } from "@/lib/env";
-import { decideMail, runTriage, undoMail, upsertRule } from "@/lib/mail/triage";
+import { clearInbox, decideMail, runTriage, undoMail, upsertRule } from "@/lib/mail/triage";
 import { CATEGORIES } from "@/lib/mail/policy";
 import { getSettings, setSetting } from "@/lib/settings";
 
@@ -39,6 +39,16 @@ export async function addHabitAction(_prev: FormState, formData: FormData): Prom
 
 export async function archiveHabitAction(habitId: number) {
   archiveHabit(db(), id.parse(habitId));
+  revalidatePath("/", "layout");
+}
+
+export async function restoreHabitAction(habitId: number) {
+  restoreHabit(db(), id.parse(habitId));
+  revalidatePath("/", "layout");
+}
+
+export async function deleteHabitAction(habitId: number) {
+  deleteHabit(db(), id.parse(habitId));
   revalidatePath("/", "layout");
 }
 
@@ -87,6 +97,18 @@ export async function runMailTriageAction(): Promise<FormState> {
       ok: true,
       message: `${s.scanned} neue Mails: ${s.archived} archiviert, ${s.trashed} gelöscht, ${s.pending} zum Entscheiden${s.notes.length ? ` · ${s.notes[0]}` : ""}`,
     };
+  } catch (err) {
+    return { ok: false, message: (err as Error).message };
+  }
+}
+
+export async function clearInboxAction(): Promise<FormState> {
+  if (isDemo()) return { ok: false, message: "Im Demo-Modus deaktiviert" };
+  try {
+    const r = await clearInbox(db());
+    revalidatePath("/", "layout");
+    const total = r.accounts.reduce((n, a) => n + a.archived, 0);
+    return { ok: true, message: `${total} Mails archiviert${r.notes.length ? ` · ${r.notes[0]}` : ""}` };
   } catch (err) {
     return { ok: false, message: (err as Error).message };
   }

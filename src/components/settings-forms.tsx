@@ -4,6 +4,7 @@ import { Trash2 } from "lucide-react";
 import { useActionState, useTransition } from "react";
 import {
   addMailRuleAction,
+  clearInboxAction,
   deleteMailRuleAction,
   saveMailProfileAction,
   saveProfileAction,
@@ -90,6 +91,27 @@ export function MailProfileForm({ profile }: { profile: string }) {
 }
 
 const ACTIONS = { keep: "Behalten", archive: "Archivieren", trash: "Löschen" } as const;
+
+export function ClearInboxForm() {
+  const [state, action, pending] = useActionState<FormState, FormData>(clearInboxAction, null);
+  return (
+    <form
+      action={action}
+      onSubmit={(e) => {
+        if (!confirm("Alle Mails aller Konten aus dem Posteingang archivieren (auch markierte)? Nichts wird gelöscht.")) e.preventDefault();
+      }}
+      className="space-y-2"
+    >
+      <p className="text-muted-foreground">
+        Archiviert alles im Posteingang aller Konten. Die Mails bleiben unter „Alle E-Mails“ und dem Label <span className="font-medium">LifeOS/Aufgeräumt</span>.
+      </p>
+      <Button type="submit" size="sm" variant="outline" disabled={pending}>
+        {pending ? "Wird geleert …" : "Posteingang leeren"}
+      </Button>
+      <Status state={state} />
+    </form>
+  );
+}
 
 export function RuleForm() {
   const [state, action, pending] = useActionState<FormState, FormData>(addMailRuleAction, null);

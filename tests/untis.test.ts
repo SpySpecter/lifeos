@@ -91,3 +91,41 @@ describe("parseCourse", () => {
     expect(parseCourse(raw)).toMatchObject({ title, kind });
   });
 });
+
+describe("Klausuren und Hausaufgaben", () => {
+  it("bildet Untis-Prüfungen ab", async () => {
+    const { mapExam } = await import("@/integrations/untis");
+    expect(
+      mapExam({
+        id: 1,
+        examType: "Klausur",
+        name: "Analysis",
+        studentClass: [],
+        assignedStudents: [],
+        examDate: 20261124,
+        startTime: 800,
+        endTime: 1015,
+        subject: "LK Ma 1",
+        teachers: [],
+        rooms: ["252"],
+        text: " ",
+      }),
+    ).toEqual({ day: "2026-11-24", start: "08:00", end: "10:15", subject: "LK Ma 1", type: "Klausur", name: "Analysis", rooms: ["252"], text: null });
+  });
+
+  it("ordnet Hausaufgaben über die Stunde einem Fach zu", async () => {
+    const { mapHomework } = await import("@/integrations/untis");
+    expect(
+      mapHomework({
+        homeworks: [
+          { lessonId: 7, date: 20261012, dueDate: 20261019, text: "S. 42 Nr. 3", remark: "", completed: false },
+          { lessonId: 99, date: 20261012, dueDate: 20261014, text: "Vokabeln", completed: true },
+        ],
+        lessons: [{ id: 7, subject: "LK Ma 1" }],
+      }),
+    ).toEqual([
+      { assigned: "2026-10-12", due: "2026-10-14", subject: null, text: "Vokabeln", completed: true },
+      { assigned: "2026-10-12", due: "2026-10-19", subject: "LK Ma 1", text: "S. 42 Nr. 3", completed: false },
+    ]);
+  });
+});

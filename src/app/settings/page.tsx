@@ -4,7 +4,7 @@ import { connection } from "next/server";
 import type { ReactNode } from "react";
 import { Suspense } from "react";
 import { DisconnectButton } from "@/components/disconnect-button";
-import { MailProfileForm, ProfileForm, RuleForm, RuleList } from "@/components/settings-forms";
+import { ClearInboxForm, MailProfileForm, ProfileForm, RuleForm, RuleList } from "@/components/settings-forms";
 import { GMAIL_MODIFY, googleAccounts, hasScope } from "@/integrations/google";
 import { db, plainRows } from "@/lib/db";
 import { monthSpendUsd } from "@/lib/openai";
@@ -154,6 +154,10 @@ async function SettingsContent({ searchParams }: { searchParams: Promise<Record<
           <p className="text-muted-foreground">Regeln gelten vor der KI. Sicherheits-Mails und markierte Mails werden nie angefasst.</p>
           <RuleForm />
           <RuleList rules={rules} />
+        </div>
+        <div className="space-y-2 border-t pt-3">
+          <h3 className="font-medium">Posteingang leeren</h3>
+          <ClearInboxForm />
         </div>
       </Row>
 

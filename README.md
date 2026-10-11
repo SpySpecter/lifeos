@@ -23,16 +23,16 @@ Runs 24/7 on a 5 € VPS and is reachable **only inside my Tailscale network**.
 |---|---|---|
 | 🎓 **School** | WebUntis | Today/next school day, double lessons merged, cancellations & substitutions highlighted |
 | 📅 **Calendar** | Google Calendar | All visible calendars, next 7 days |
-| 🤖 **Mail assistant** | Gmail + OpenAI (`gpt-6-luna`) | Twice-daily triage of all connected inboxes: labels, archive, trash (recoverable). Hard safety rules + learned sender rules run before the model; uncertain mails wait for a one-tap decision; every action can be undone. Monthly cost cap |
+| 🤖 **Mail assistant** | Gmail + OpenAI (`gpt-6-luna`) | Twice-daily triage of all connected inboxes: labels, archive, trash (recoverable). Hard safety rules + learned sender rules run before the model; uncertain mails wait for a one-tap decision; every action can be undone. Monthly cost cap. One-click "empty inbox" archives everything under a label |
 | ✉️ **Inbox & Drive** | Gmail, Google Drive | Multiple Google accounts, unread per account, latest unread mails, recently edited files |
 | 🌦 **Weather** | Open-Meteo | Uses the browser's location (rounded to ~1 km), hourly + 5-day forecast |
-| ✅ **Habits** | local SQLite | Check off with optimistic UI, streaks, 16-week heatmap |
+| ✅ **Habits** | local SQLite | Check off with optimistic UI, streaks, 16-week heatmap, archive/restore/delete |
 | ❤️ **Health** | iPhone Shortcut → Apple Health | Daily automation posts steps, sleep, workouts, energy, resting HR; manual entry; 14/30/90-day charts |
 | 🧑‍💻 **GitHub** | GraphQL API | Contribution heatmap, recently pushed repos with CI status, open PRs |
 | 🎵 **Music** | Spotify Web API | Now playing, recently played, top artists (PKCE, dev-mode-compatible endpoints only) |
-| 📰 **News** | RSS / Atom | Tagesschau, politics, regional (rbb24), blue-light reports, heise, The Verge, Hacker News – category tabs, local stories pinned |
+| 📰 **News** | RSS / Atom | Tagesschau, politics, regional (rbb24), blue-light reports, heise, The Verge, Hacker News – thumbnails (feed media or the article's `og:image`), category tabs, local stories pinned |
 
-Plus: dark/light theme, installable PWA for the iPhone home screen, per-widget streaming & error isolation, stale-while-error caching.
+Plus: a read-only **Untis MCP server** at `/api/mcp` (timetable, changes, exams, homework) so Claude can answer school questions from inside the tailnet, dark/light theme, installable PWA for the iPhone home screen, per-widget streaming & error isolation, stale-while-error caching.
 
 <p>
   <img src="docs/screenshots/health.png" alt="Health charts" width="49%">
