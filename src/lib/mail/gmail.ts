@@ -4,15 +4,37 @@ import { type Category, CATEGORY_LABEL, type MailMeta, parseFrom } from "./polic
 
 const BASE = "https://gmail.googleapis.com/gmail/v1/users/me";
 
-async function call<T>(token: string, path: string, init: RequestInit = {}): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    ...init,
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(init.headers ?? {}) },
-    signal: AbortSignal.timeout(20_000),
-    cache: "no-store",
-  });
-  if (!res.ok) throw new Error(`Gmail ${res.status}: ${(await res.text()).slice(0, 160)}`);
-  return (res.status === 204 ? undefined : await res.json()) as T;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Wartezeiten bei Gmail-Kontingentgrenzen (Limit gilt pro Minute) */
+export const RETRY_DELAYS_MS = [2_000, 8_000, 20_000, 40_000];
+
+export function isRateLimit(status: number, body: string): boolean {
+  return status === 429 || (status === 403 && /rate ?limit|quota exceeded|userRateLimitExceeded/i.test(body));
+}
+
+async function call<T>(token: string, path: string, init: RequestInit = {}, delays = RETRY_DELAYS_MS): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(`${BASE}${path}`, {
+      ...init,
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", ...(init.headers ?? {}) },
+      signal: AbortSignal.timeout(20_000),
+      cache: "no-store",
+    });
+    if (res.ok) return (res.status === 204 ? undefined : await res.json()) as T;
+    const body = await res.text();
+    if (isRateLimit(res.status, body) && attempt < delays.length) {
+      await sleep(delays[attempt]);
+      continue;
+    }
+    const message = (() => {
+      try {
+        return (JSON.parse(body) as { error?: { message?: string } }).error?.message ?? body;
+      } catch {
+        return body;
+      }
+    })();
+    throw new Error(`Gmail ${res.status}: ${message.slice(0, 120)}`);
+  }
 }
 
 /** IDs im Posteingang (ohne markierte), neueste zuerst. */

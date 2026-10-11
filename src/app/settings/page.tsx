@@ -82,7 +82,7 @@ async function SettingsContent({ searchParams }: { searchParams: Promise<Record<
     : !googleConfigured
       ? ["off", "Nicht eingerichtet"]
       : accounts.length
-        ? ["ok", `${accounts.length} Konto${accounts.length > 1 ? "en" : ""} verbunden`]
+        ? ["ok", `${accounts.length} ${accounts.length > 1 ? "Konten" : "Konto"} verbunden`]
         : ["todo", "Nicht verbunden"];
   const settings = getSettings(db());
   const rules = db().prepare("SELECT id, pattern, action, category, source FROM mail_rules ORDER BY id DESC").all() as Parameters<typeof RuleList>[0]["rules"];

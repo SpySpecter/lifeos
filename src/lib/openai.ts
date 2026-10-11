@@ -22,7 +22,7 @@ export function monthSpendUsd(db: DB, now = new Date()): number {
 
 export class BudgetExceededError extends Error {}
 
-type ResponsesApiResult = {
+export type ResponsesApiResult = {
   output?: { type: string; content?: { type: string; text?: string }[] }[];
   usage?: { input_tokens: number; output_tokens: number };
   error?: { message: string } | null;
@@ -82,7 +82,24 @@ export async function structuredCompletion<T>(
     costUsd(model, usage.input_tokens, usage.output_tokens),
   );
 
-  const text = json.output?.find((o) => o.type === "message")?.content?.find((c) => c.type === "output_text")?.text;
-  if (!text) throw new Error("OpenAI: leere Antwort");
-  return JSON.parse(text) as T;
+  return extractJson<T>(json);
+}
+
+/** Sucht in allen Text-Ausgaben das erste gültige JSON-Objekt (auch wenn das Modell Text davor/danach schreibt). */
+export function extractJson<T>(json: ResponsesApiResult): T {
+  const texts = (json.output ?? [])
+    .filter((o) => o.type === "message")
+    .flatMap((o) => o.content ?? [])
+    .filter((c) => c.type === "output_text" && c.text)
+    .map((c) => c.text!);
+  for (const t of texts) {
+    for (const candidate of [t, t.slice(t.indexOf("{"), t.lastIndexOf("}") + 1)]) {
+      try {
+        return JSON.parse(candidate) as T;
+      } catch {
+        /* nächster Versuch */
+      }
+    }
+  }
+  throw new Error(`OpenAI: keine gültige JSON-Antwort (${texts.join(" ").slice(0, 60) || "leer"})`);
 }

@@ -79,6 +79,9 @@ export function protection(mail: MailMeta): Decision | null {
   if (mail.labels.includes("STARRED")) {
     return { category: null, action: "keep", status: "done", confidence: null, reason: "Markiert (Stern)", source: "schutz" };
   }
+  if (/^\s*(re|aw|antw|sv)\s*:/i.test(mail.subject)) {
+    return { category: "persoenlich", action: "keep", status: "done", confidence: null, reason: "Antwort in einer Unterhaltung", source: "schutz" };
+  }
   const text = `${mail.subject} ${mail.snippet}`.toLowerCase();
   if (/(sicherheitswarnung|security alert|neue anmeldung|new sign-?in|passwort|password|bestätigungscode|verification code|2fa|zwei-faktor|einmalcode|login code)/.test(text)) {
     return { category: "konto", action: "keep", status: "done", confidence: null, reason: "Sicherheits-/Konto-Mail", source: "schutz" };

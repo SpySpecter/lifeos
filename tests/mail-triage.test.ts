@@ -8,6 +8,8 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 /** Vollständiger Lauf gegen simulierte Gmail- und OpenAI-APIs: welche Aufrufe passieren wirklich? */
 
 const calls: { method: string; url: string; body?: unknown }[] = [];
+let quotaHitsLeft = 1;
+let badAiAnswersLeft = 1;
 
 const MAILS: Record<string, { from: string; subject: string; labels: string[] }> = {
   ad: { from: "Shop <deals@shop.de>", subject: "Nur heute -30 %", labels: ["INBOX", "CATEGORY_PROMOTIONS"] },
@@ -42,6 +44,7 @@ beforeAll(async () => {
     const body = init?.body ? JSON.parse(String(init.body)) : undefined;
     calls.push({ method, url, body });
     if (url.includes("api.openai.com")) {
+      if (badAiAnswersLeft-- > 0) return json({ output: [{ type: "message", content: [{ type: "output_text", text: "We need JSON" }] }], usage: { input_tokens: 10, output_tokens: 3 } });
       return json({ output: [{ type: "message", content: [{ type: "output_text", text: JSON.stringify(AI) }] }], usage: { input_tokens: 1000, output_tokens: 200 } });
     }
     if (url.includes("/messages?")) return json({ messages: Object.keys(MAILS).map((id) => ({ id })) });
@@ -59,10 +62,15 @@ beforeAll(async () => {
     }
     if (url.endsWith("/labels") && method === "GET") return json({ labels: [] });
     if (url.endsWith("/labels") && method === "POST") return json({ id: `L_${body.name}` });
+    if (url.includes("batchModify") && quotaHitsLeft-- > 0) {
+      return json({ error: { code: 403, message: "Quota exceeded for quota metric 'Total Query Cost'" } }, 403);
+    }
     if (url.includes("batchModify") || url.endsWith("/trash") || url.endsWith("/untrash")) return new Response(null, { status: 204 });
     throw new Error(`unerwarteter Aufruf ${method} ${url}`);
   });
 
+  const { RETRY_DELAYS_MS } = await import("@/lib/mail/gmail");
+  RETRY_DELAYS_MS.fill(0); // im Test nicht wirklich warten
   const { saveToken } = await import("@/lib/tokens");
   saveToken("google:luis@example.com", {
     accessToken: "at",
@@ -78,7 +86,10 @@ describe("runTriage", () => {
     const { db } = await import("@/lib/db");
     const summary = await runTriage(db(), "manuell");
 
-    expect(summary).toMatchObject({ scanned: 5, trashed: 1, archived: 1, kept: 2, pending: 1 });
+    // trotz einer Kontingent-Antwort von Gmail und einer kaputten KI-Antwort vollständig durchgelaufen
+    expect(summary).toMatchObject({ scanned: 5, trashed: 1, archived: 1, kept: 2, pending: 1, notes: [] });
+    expect(quotaHitsLeft).toBeLessThan(0);
+    expect(badAiAnswersLeft).toBeLessThan(0);
 
     const trashed = calls.filter((c) => c.url.endsWith("/trash")).map((c) => c.url.split("/").at(-2));
     expect(trashed).toEqual(["ad"]);
@@ -92,7 +103,7 @@ describe("runTriage", () => {
     expect(calls.some((c) => c.url.includes("/school/trash"))).toBe(false);
 
     // Die KI hat nur Metadaten bekommen und die Sicherheitsmail gar nicht gesehen
-    const aiCall = calls.find((c) => c.url.includes("openai"));
+    const aiCall = calls.filter((c) => c.url.includes("openai")).at(-1);
     const sent = JSON.parse((aiCall!.body as { input: string }).input);
     expect(sent).toHaveLength(4);
     expect(JSON.stringify(sent)).not.toContain("Sicherheitswarnung");
@@ -135,6 +146,6 @@ describe("runTriage", () => {
   it("verbucht die KI-Kosten", async () => {
     const { monthSpendUsd } = await import("@/lib/openai");
     const { db } = await import("@/lib/db");
-    expect(monthSpendUsd(db())).toBeCloseTo((1000 * 0.1 + 200 * 0.5) / 1e6);
+    expect(monthSpendUsd(db())).toBeCloseTo((10 * 0.1 + 3 * 0.5 + 1000 * 0.1 + 200 * 0.5) / 1e6);
   });
 });

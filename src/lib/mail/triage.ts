@@ -78,18 +78,30 @@ function record(db: DB, account: string, m: MailMeta, d: Decision): void {
   );
 }
 
-async function classifyWithAi(db: DB, mails: MailMeta[], profile: string): Promise<Map<string, Decision>> {
+/**
+ * KI-Einordnung in Paketen. Ein fehlgeschlagenes Paket wird einmal wiederholt und bricht die anderen nicht ab;
+ * seine Mails bleiben unverändert und kommen beim nächsten Lauf wieder dran. Ist das Budget erreicht, wird abgebrochen.
+ */
+async function classifyWithAi(db: DB, mails: MailMeta[], profile: string, notes: string[]): Promise<Map<string, Decision>> {
   const out = new Map<string, Decision>();
   for (let i = 0; i < mails.length; i += AI_BATCH) {
     const batch = mails.slice(i, i + AI_BATCH);
-    const res = await structuredCompletion<{ results: (AiVerdict & { i: number })[] }>(db, {
-      purpose: "mail-triage",
-      instructions: instructions(profile),
-      input: aiInput(batch),
-      schemaName: "mail_triage",
-      schema: AI_SCHEMA as unknown as Record<string, unknown>,
-    });
-    for (const r of res.results) {
+    let res: { results: (AiVerdict & { i: number })[] } | null = null;
+    for (let attempt = 0; attempt < 2 && !res; attempt++) {
+      try {
+        res = await structuredCompletion(db, {
+          purpose: "mail-triage",
+          instructions: instructions(profile),
+          input: aiInput(batch),
+          schemaName: "mail_triage",
+          schema: AI_SCHEMA as unknown as Record<string, unknown>,
+        });
+      } catch (err) {
+        if (err instanceof BudgetExceededError) throw err;
+        if (attempt === 1) notes.push(`KI-Paket übersprungen (${batch.length} Mails): ${(err as Error).message}`);
+      }
+    }
+    for (const r of res?.results ?? []) {
       const mail = batch[r.i];
       if (!mail || !CATEGORIES.includes(r.category)) continue;
       out.set(mail.id, applyPolicy({ ...r, confidence: Math.max(0, Math.min(1, r.confidence)) }));
@@ -105,6 +117,12 @@ async function execute(token: string, labels: Map<Category, string>, id: string,
   if (action === "archive") await modify(token, [id], add, ["INBOX"]);
   else await modify(token, [id], add, []);
   if (action === "trash") await trash(token, id);
+}
+
+async function executeGroup(token: string, labels: Map<Category, string>, ids: string[], action: MailAction, category: Category | null) {
+  const label = category ? labels.get(category) : undefined;
+  await modify(token, ids, label ? [label] : [], action === "archive" ? ["INBOX"] : []);
+  if (action === "trash") for (const id of ids) await trash(token, id);
 }
 
 export async function runTriage(db: DB, trigger: "timer" | "manuell"): Promise<RunSummary> {
@@ -163,26 +181,49 @@ export async function runTriage(db: DB, trigger: "timer" | "manuell"): Promise<R
 
       if (forAi.length && aiAvailable) {
         try {
-          for (const [id, d] of await classifyWithAi(db, forAi, profile)) decisions.set(id, d);
+          for (const [id, d] of await classifyWithAi(db, forAi, profile, summary.notes)) decisions.set(id, d);
         } catch (err) {
-          // Budget aufgebraucht oder API-Fehler: diese Mails bleiben unverändert und kommen beim nächsten Lauf wieder dran
-          summary.notes.push(err instanceof BudgetExceededError ? err.message : `KI-Fehler: ${(err as Error).message}`);
+          // Budget aufgebraucht: diese Mails bleiben unverändert und kommen nach dem Monatswechsel dran
+          summary.notes.push((err as Error).message);
         }
       }
 
       const labels = await ensureLabels(token);
+      const count = (d: Decision, n: number) => {
+        if (d.status === "pending") summary.pending += n;
+        else if (d.action === "trash") summary.trashed += n;
+        else if (d.action === "archive") summary.archived += n;
+        else summary.kept += n;
+      };
+
+      // Offene Entscheidungen: in Gmail nichts ändern, nur merken
       for (const m of metas) {
         const d = decisions.get(m.id);
-        if (!d) continue;
-        try {
-          if (d.status === "done") await execute(token, labels, m.id, d.action, d.category);
+        if (d?.status === "pending") {
           record(db, account, m, d);
-          if (d.status === "pending") summary.pending++;
-          else if (d.action === "trash") summary.trashed++;
-          else if (d.action === "archive") summary.archived++;
-          else summary.kept++;
+          count(d, 1);
+        }
+      }
+
+      // Ausführen gruppiert nach (Aktion, Kategorie): ein batchModify pro Gruppe statt pro Mail (Gmail-Kontingent)
+      const groups = new Map<string, { action: MailAction; category: Category | null; mails: MailMeta[] }>();
+      for (const m of metas) {
+        const d = decisions.get(m.id);
+        if (d?.status !== "done") continue;
+        const key = `${d.action}|${d.category ?? ""}`;
+        if (!groups.has(key)) groups.set(key, { action: d.action, category: d.category, mails: [] });
+        groups.get(key)!.mails.push(m);
+      }
+      for (const g of groups.values()) {
+        try {
+          await executeGroup(token, labels, g.mails.map((m) => m.id), g.action, g.category);
+          for (const m of g.mails) {
+            const d = decisions.get(m.id)!;
+            record(db, account, m, d);
+            count(d, 1);
+          }
         } catch (err) {
-          summary.notes.push(`${m.subject.slice(0, 40)}: ${(err as Error).message}`);
+          summary.notes.push(`${g.mails.length}× ${g.action}/${g.category ?? "-"} nicht ausgeführt: ${(err as Error).message}`);
         }
       }
     }

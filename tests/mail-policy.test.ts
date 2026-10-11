@@ -33,6 +33,11 @@ describe("Schutzregeln", () => {
     expect(protection(mail({ subject: "Security alert: new sign-in" }))).toMatchObject({ category: "konto", action: "keep" });
     expect(protection(mail({ subject: "Dein Bestätigungscode" }))).toMatchObject({ action: "keep" });
   });
+  it("behält Antworten in Unterhaltungen (Re:/AW:)", () => {
+    expect(protection(mail({ subject: "Re: Cancel Subscription and refund" }))).toMatchObject({ action: "keep", source: "schutz" });
+    expect(protection(mail({ subject: "AW: Termin" }))).toMatchObject({ action: "keep" });
+    expect(protection(mail({ subject: "Rezept der Woche" }))).toBeNull();
+  });
   it("greift bei normalen Mails nicht", () => {
     expect(protection(mail())).toBeNull();
   });
@@ -97,5 +102,24 @@ describe("KI-Eingabe", () => {
     const item = AI_SCHEMA.properties.results.items;
     expect(item.additionalProperties).toBe(false);
     expect([...item.required].sort()).toEqual(Object.keys(item.properties).sort());
+  });
+});
+
+import { extractJson } from "@/lib/openai";
+import { isRateLimit } from "@/lib/mail/gmail";
+
+describe("robuste Hilfsfunktionen", () => {
+  const out = (text: string) => ({ output: [{ type: "message", content: [{ type: "output_text", text }] }] });
+  it("liest JSON auch mit Text drumherum", () => {
+    expect(extractJson(out('Hier: {"a":1} fertig'))).toEqual({ a: 1 });
+    expect(extractJson(out('{"a":2}'))).toEqual({ a: 2 });
+  });
+  it("wirft verständlich bei reinem Text", () => {
+    expect(() => extractJson(out("We need JSON"))).toThrow(/keine gültige JSON-Antwort/);
+  });
+  it("erkennt Gmail-Kontingentfehler", () => {
+    expect(isRateLimit(429, "")).toBe(true);
+    expect(isRateLimit(403, "Quota exceeded for quota metric")).toBe(true);
+    expect(isRateLimit(403, "Insufficient Permission")).toBe(false);
   });
 });
