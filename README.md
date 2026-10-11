@@ -98,8 +98,9 @@ docker compose up --build
 One script turns a fresh Ubuntu 24.04 VPS into a Tailscale-only host running LifeOS (Docker, UFW, unattended upgrades, auto-update and backup timers):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/SpySpecter/lifeos/main/deploy/bootstrap-vps.sh -o bootstrap-vps.sh
-sudo bash bootstrap-vps.sh
+gh auth login --web -s read:packages
+sudo git clone https://github.com/SpySpecter/lifeos /opt/lifeos
+sudo bash /opt/lifeos/deploy/bootstrap-vps.sh
 ```
 
 Step-by-step setup for Google, Spotify, GitHub, WebUntis and the iPhone Shortcut (German): [`docs/SETUP.md`](docs/SETUP.md).

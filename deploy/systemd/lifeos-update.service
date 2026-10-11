@@ -1,11 +1,12 @@
 [Unit]
-Description=LifeOS: neues Image aus GHCR ziehen und bei Änderung neu starten
+Description=LifeOS: Repo + Image aktualisieren und bei Änderung neu starten
 After=docker.service network-online.target
 Wants=network-online.target
 
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/lifeos
+ExecStart=/usr/bin/git -C /opt/lifeos pull --ff-only --quiet
 ExecStart=/usr/bin/docker compose pull --quiet
-ExecStart=/usr/bin/docker compose up -d --remove-orphans
+ExecStart=/usr/bin/docker compose up -d --no-build --remove-orphans
 ExecStartPost=/usr/bin/docker image prune -f

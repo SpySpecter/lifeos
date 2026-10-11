@@ -12,21 +12,22 @@ Diese Anleitung führt durch alles, was nur du selbst erledigen kannst: Zugänge
 2. Den SSH-Schlüssel des Laptops beim Anbieter hinterlegen (oder per `ssh-copy-id root@<öffentliche-IP>`).
 3. In der [Tailscale-Admin-Konsole](https://login.tailscale.com/admin/machines) den alten Eintrag `vps-6a3e96a0` löschen, damit der neue Server den Namen `lifeos` bekommt.
 4. Unter **DNS** prüfen, dass **MagicDNS** und **HTTPS Certificates** aktiviert sind (wird für `tailscale serve` gebraucht).
-5. Das GHCR-Paket öffentlich machen (einmalig, nachdem die erste GitHub-Action gelaufen ist): GitHub → Profil → *Packages* → `lifeos` → *Package settings* → *Change visibility* → **Public**. Das Image enthält keine Geheimnisse. (Alternative: auf dem VPS `docker login ghcr.io` mit einem Token mit `read:packages`.)
+5. Optional: das GHCR-Paket öffentlich machen (GitHub → *Packages* → `lifeos` → *Package settings* → **Public**). Nicht nötig, wenn `gh` auf dem VPS eingeloggt ist – das Skript meldet Docker dann mit deinem GitHub-Login bei GHCR an.
 
-Dann auf dem VPS:
+Dann auf dem VPS (als normaler Nutzer mit sudo):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/SpySpecter/lifeos/main/deploy/bootstrap-vps.sh -o bootstrap-vps.sh
-sudo bash bootstrap-vps.sh
+gh auth login --web -s read:packages        # Gerätecode im Browser bestätigen
+sudo git clone https://github.com/SpySpecter/lifeos /opt/lifeos
+sudo bash /opt/lifeos/deploy/bootstrap-vps.sh
 ```
 
-Das Skript installiert Docker, Tailscale, Firewall (UFW), automatische Sicherheitsupdates, legt `/opt/lifeos` an, erzeugt `ENCRYPTION_KEY` und `INGEST_TOKEN`, startet den Container und veröffentlicht ihn per `tailscale serve` **nur im Tailnet**. Während des Laufs erscheint ein Tailscale-Login-Link – im Browser öffnen und bestätigen.
+Das Skript installiert Docker, Tailscale und die GitHub CLI aus den offiziellen Paketquellen, richtet Firewall (UFW) und automatische Sicherheitsupdates ein, erzeugt `ENCRYPTION_KEY` und `INGEST_TOKEN`, startet den Container und veröffentlicht ihn per `tailscale serve` **nur im Tailnet**. Ist Tailscale noch nicht verbunden, erscheint ein Login-Link – im Browser öffnen und bestätigen. Updates holt sich der Server danach selbst (`git pull` + neues Image alle 10 Minuten).
 
-Zum Schluss, **nachdem** du dich einmal über Tailscale verbunden hast (`ssh root@lifeos`):
+Zum Schluss, **nachdem** du dich einmal über Tailscale verbunden hast (`ssh ubuntu@lifeos`):
 
 ```bash
-sudo bash bootstrap-vps.sh --lockdown-ssh
+sudo bash /opt/lifeos/deploy/bootstrap-vps.sh --lockdown-ssh
 ```
 
 Ab dann ist der VPS aus dem Internet gar nicht mehr erreichbar (kein offener Port außer Tailscales UDP-Port).
@@ -37,7 +38,7 @@ Ab dann ist der VPS aus dem Internet gar nicht mehr erreichbar (kein offener Por
 
 ```bash
 sudo nano /opt/lifeos/.env
-cd /opt/lifeos && sudo docker compose up -d
+cd /opt/lifeos && sudo docker compose up -d --no-build
 ```
 
 | Variable | Woher |
@@ -49,7 +50,7 @@ cd /opt/lifeos && sudo docker compose up -d
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Siehe Abschnitt 3. |
 | `SPOTIFY_CLIENT_ID` | Siehe Abschnitt 4. |
 
-Nach jeder Änderung: `sudo docker compose up -d` (startet den Container mit der neuen Konfiguration neu).
+Nach jeder Änderung: `sudo docker compose up -d --no-build` (startet den Container mit der neuen Konfiguration neu).
 
 ---
 
@@ -129,6 +130,6 @@ Safari → `https://lifeos.<tailnet>` → Teilen → **Zum Home-Bildschirm**. F�
 |---|---|
 | Status / Logs | `docker compose ps` · `docker compose logs -f` |
 | Manuell aktualisieren | `sudo systemctl start lifeos-update` (läuft sonst alle 10 min) |
-| Backup jetzt | `sudo ./backup.sh` (läuft sonst täglich 03:30, 14 Tage Aufbewahrung in `data/backups/`) |
-| Wiederherstellen | `docker compose down && rm -f data/lifeos.db-wal data/lifeos.db-shm && cp data/backups/lifeos-JJJJ-MM-TT.db data/lifeos.db && docker compose up -d` |
+| Backup jetzt | `sudo deploy/backup.sh` (läuft sonst täglich 03:30, 14 Tage Aufbewahrung in `data/backups/`) |
+| Wiederherstellen | `docker compose down && rm -f data/lifeos.db-wal data/lifeos.db-shm && cp data/backups/lifeos-JJJJ-MM-TT.db data/lifeos.db && docker compose up -d --no-build` |
 | Tailscale-Freigabe prüfen | `tailscale serve status` |

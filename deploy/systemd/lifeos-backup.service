@@ -4,4 +4,4 @@ After=docker.service
 
 [Service]
 Type=oneshot
-ExecStart=/opt/lifeos/backup.sh
+ExecStart=/opt/lifeos/deploy/backup.sh
