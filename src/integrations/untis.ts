@@ -27,17 +27,22 @@ const untisDay = (d: number) => {
   return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
 };
 
-/** Gleiche Abbildung wie der frühere Untis-MCP-Server (my-assistant/integrations/untis/server.py). */
+const names = (list: { name?: string }[] | undefined) => (list ?? []).map((x) => x.name ?? "").filter(Boolean);
+
+/**
+ * Gleiche Abbildung wie der frühere Untis-MCP-Server (my-assistant/integrations/untis/server.py).
+ * Viele Schulen blenden für Schülerkonten Lehrer (`te`) komplett aus, daher sind alle Listen optional.
+ */
 export function mapLesson(l: Lesson): SchoolLesson {
   const notes = [l.substText, l.info, l.lstext].filter((s): s is string => Boolean(s && s.trim()));
   return {
     day: untisDay(l.date),
     start: untisTime(l.startTime),
     end: untisTime(l.endTime),
-    subject: l.su[0]?.name ?? l.lstext ?? "—",
-    subjectLong: l.su[0]?.longname ?? null,
-    teachers: l.te.map((t) => t.name).filter(Boolean),
-    rooms: l.ro.map((r) => r.name).filter(Boolean),
+    subject: l.su?.[0]?.name ?? l.lstext ?? "—",
+    subjectLong: l.su?.[0]?.longname ?? null,
+    teachers: names(l.te),
+    rooms: names(l.ro),
     status: l.code ?? "regular",
     note: notes.length ? notes.join(" · ") : null,
   };

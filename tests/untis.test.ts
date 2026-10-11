@@ -29,6 +29,17 @@ describe("mapLesson", () => {
       note: null,
     });
   });
+  it("verträgt fehlende Lehrer-/Raum-/Fachlisten (Schülerkonten)", () => {
+    const raw = lesson({});
+    delete (raw as Partial<Lesson>).te;
+    delete (raw as Partial<Lesson>).ro;
+    const l = mapLesson(raw);
+    expect(l.teachers).toEqual([]);
+    expect(l.rooms).toEqual([]);
+    const noSubject = lesson({ lstext: "Projekttag" });
+    delete (noSubject as Partial<Lesson>).su;
+    expect(mapLesson(noSubject).subject).toBe("Projekttag");
+  });
   it("übernimmt Ausfall und Vertretungstext", () => {
     const l = mapLesson(lesson({ code: "cancelled", substText: "Fortbildung", info: "  " }));
     expect(l.status).toBe("cancelled");
