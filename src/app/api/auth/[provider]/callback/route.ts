@@ -1,7 +1,9 @@
 import { redirect } from "next/navigation";
 import type { NextRequest } from "next/server";
-import { consumeOAuthState, saveToken, type Provider } from "@/lib/tokens";
-import { exchangeGoogleCode } from "@/integrations/google";
+import { invalidate } from "@/lib/cache";
+import { db } from "@/lib/db";
+import { consumeOAuthState, saveToken } from "@/lib/tokens";
+import { exchangeGoogleCode, googleEmail, googleKey } from "@/integrations/google";
 import { exchangeSpotifyCode } from "@/integrations/spotify";
 
 export async function GET(request: NextRequest, ctx: RouteContext<"/api/auth/[provider]/callback">) {
@@ -9,7 +11,7 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/auth/[pr
   if (provider !== "google" && provider !== "spotify") return new Response("Unbekannter Anbieter", { status: 404 });
 
   const params = request.nextUrl.searchParams;
-  const state = consumeOAuthState(provider as Provider, params.get("state"));
+  const state = consumeOAuthState(provider, params.get("state"));
   const code = params.get("code");
   if (!state || !code) redirect(`/settings?error=${provider}-denied`);
 
@@ -18,12 +20,15 @@ export async function GET(request: NextRequest, ctx: RouteContext<"/api/auth/[pr
     const res =
       provider === "google" ? await exchangeGoogleCode(code) : await exchangeSpotifyCode(code, state.verifier ?? "");
     if (!res.refresh_token) throw new Error("Kein Refresh-Token erhalten");
-    saveToken(provider, {
+    // Google: ein Eintrag pro Konto, damit mehrere Konten parallel verbunden sein können
+    const key = provider === "google" ? googleKey(await googleEmail(res.access_token)) : "spotify";
+    saveToken(key, {
       accessToken: res.access_token,
       refreshToken: res.refresh_token,
       expiresAt: Date.now() + res.expires_in * 1000,
       scope: res.scope,
     });
+    invalidate(db(), `${provider}:`);
     ok = true;
   } catch (err) {
     console.error(`[oauth:${provider}]`, err);

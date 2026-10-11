@@ -6,6 +6,9 @@ const bool = z
   .optional()
   .transform((v) => v === "true" || v === "1");
 
+/** Leere Werte aus der .env (`KEY=`) wie „nicht gesetzt“ behandeln, damit Standardwerte greifen. */
+const emptyAsUnset = (v: unknown) => (typeof v === "string" && v.trim() === "" ? undefined : v);
+
 const optional = z
   .string()
   .optional()
@@ -15,8 +18,8 @@ const schema = z.object({
   NODE_ENV: z.string().default("development"),
   DEMO_MODE: bool,
   DATA_DIR: z.string().default("./data"),
-  APP_URL: z.string().url().default("http://localhost:3000"),
-  APP_TZ: z.string().default("Europe/Berlin"),
+  APP_URL: z.preprocess(emptyAsUnset, z.string().url().default("http://localhost:3000")),
+  APP_TZ: z.preprocess(emptyAsUnset, z.string().default("Europe/Berlin")),
 
   // Zugriffsschutz: Tailscale `serve` setzt diesen Header für Nutzer im Tailnet.
   REQUIRE_TAILSCALE_AUTH: bool,
@@ -36,13 +39,35 @@ const schema = z.object({
 
   GITHUB_TOKEN: optional,
 
-  NEWS_FEEDS: z
-    .string()
-    .default(
-      "Tagesschau|https://www.tagesschau.de/index~rss2.xml,heise|https://www.heise.de/rss/heise-atom.xml",
+  // Mail-Sortierung (KI) und geplante Jobs
+  OPENAI_API_KEY: optional,
+  OPENAI_MODEL: z.preprocess(emptyAsUnset, z.string().default("gpt-6-luna")),
+  /** Harte Monatsgrenze für KI-Kosten in US-Dollar; danach pausiert die KI-Einordnung bis zum Monatswechsel. */
+  OPENAI_MONTHLY_BUDGET_USD: z.preprocess(emptyAsUnset, z.coerce.number().default(1)),
+  /** Token für systemd-Timer → POST /api/jobs/* */
+  CRON_TOKEN: optional,
+
+  NEWS_FEEDS: z.preprocess(
+    emptyAsUnset,
+    z.string().default(
+      [
+        "Tagesschau|https://www.tagesschau.de/index~rss2.xml|Allgemein",
+        "Tagesschau Politik|https://www.tagesschau.de/inland/innenpolitik/index~rss2.xml|Politik",
+        "rbb24|https://www.rbb24.de/aktuell/index.xml/feed=rss.xml|Region",
+        "rbb24 Blaulicht|https://www.rbb24.de/panorama/index.xml/feed=rss.xml|Blaulicht",
+        "heise|https://www.heise.de/rss/heise-atom.xml|Tech",
+        "The Verge|https://www.theverge.com/rss/index.xml|Tech",
+        "Hacker News|https://hnrss.org/frontpage?points=150|Tech",
+      ].join(","),
     ),
-  DEFAULT_LAT: z.coerce.number().default(52.52),
-  DEFAULT_LON: z.coerce.number().default(13.405),
+  ),
+  /** Orte, deren Meldungen hervorgehoben werden (kommagetrennt). */
+  NEWS_LOCAL_KEYWORDS: z.preprocess(
+    emptyAsUnset,
+    z.string().default("Wandlitz,Basdorf,Bernau,Barnim,Panketal,Zepernick,Oranienburg,Eberswalde,Biesenthal"),
+  ),
+  DEFAULT_LAT: z.preprocess(emptyAsUnset, z.coerce.number().default(52.52)),
+  DEFAULT_LON: z.preprocess(emptyAsUnset, z.coerce.number().default(13.405)),
 });
 
 export type Env = z.infer<typeof schema>;
@@ -65,10 +90,18 @@ export function allowedUsers(): string[] {
     .filter(Boolean);
 }
 
-export function newsFeeds(): { name: string; url: string }[] {
+/** Format je Eintrag: `Name|URL|Kategorie` (Kategorie optional, Standard „Allgemein“). */
+export function newsFeeds(): { name: string; url: string; category: string }[] {
   return env()
     .NEWS_FEEDS.split(",")
-    .map((entry) => entry.split("|"))
-    .filter((parts) => parts.length === 2)
-    .map(([name, url]) => ({ name: name.trim(), url: url.trim() }));
+    .map((entry) => entry.split("|").map((p) => p.trim()))
+    .filter((parts) => parts.length >= 2 && parts[0] && parts[1])
+    .map(([name, url, category]) => ({ name, url, category: category || "Allgemein" }));
+}
+
+export function localKeywords(): string[] {
+  return env()
+    .NEWS_LOCAL_KEYWORDS.split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
 }

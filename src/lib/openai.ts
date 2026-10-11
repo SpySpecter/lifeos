@@ -1,0 +1,88 @@
+import "server-only";
+import type { DB } from "./db";
+import { env } from "./env";
+
+/** USD pro 1 Mio. Token [Eingabe, Ausgabe]. Unbekannte Modelle werden bewusst teuer geschätzt. */
+const PRICES: Record<string, [number, number]> = {
+  "gpt-6-luna": [0.1, 0.5],
+  "gpt-5.4-mini": [0.75, 4.5],
+};
+const FALLBACK_PRICE: [number, number] = [2, 8];
+
+export function costUsd(model: string, input: number, output: number): number {
+  const [i, o] = PRICES[model] ?? FALLBACK_PRICE;
+  return (input * i + output * o) / 1_000_000;
+}
+
+export function monthSpendUsd(db: DB, now = new Date()): number {
+  const start = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  const row = db.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS usd FROM llm_usage WHERE at >= ?").get(start) as { usd: number };
+  return row.usd;
+}
+
+export class BudgetExceededError extends Error {}
+
+type ResponsesApiResult = {
+  output?: { type: string; content?: { type: string; text?: string }[] }[];
+  usage?: { input_tokens: number; output_tokens: number };
+  error?: { message: string } | null;
+};
+
+/**
+ * Ein Aufruf der OpenAI Responses API mit erzwungenem JSON-Schema (Structured Outputs).
+ * Verbrauch wird in `llm_usage` gebucht; vor jedem Aufruf wird das Monatsbudget geprüft.
+ */
+export async function structuredCompletion<T>(
+  db: DB,
+  opts: { purpose: string; instructions: string; input: string; schemaName: string; schema: Record<string, unknown> },
+): Promise<T> {
+  const { OPENAI_API_KEY: key, OPENAI_MODEL: model, OPENAI_MONTHLY_BUDGET_USD: budget } = env();
+  if (!key) throw new Error("OPENAI_API_KEY fehlt");
+  if (monthSpendUsd(db) >= budget) throw new BudgetExceededError(`KI-Monatsbudget von ${budget} $ erreicht`);
+
+  const body = {
+    model,
+    instructions: opts.instructions,
+    input: opts.input,
+    store: false,
+    reasoning: { effort: "none" },
+    text: { format: { type: "json_schema", name: opts.schemaName, strict: true, schema: opts.schema } },
+  };
+  const call = (payload: object) =>
+    fetch("https://api.openai.com/v1/responses", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(90_000),
+      cache: "no-store",
+    });
+
+  let res = await call(body);
+  if (res.status === 400) {
+    // Ältere/andere Modelle kennen reasoning.effort=none nicht → ohne Reasoning-Parameter wiederholen
+    const text = await res.text();
+    if (/reasoning/i.test(text)) {
+      const { reasoning: _omit, ...rest } = body;
+      void _omit;
+      res = await call(rest);
+    } else {
+      throw new Error(`OpenAI 400: ${text.slice(0, 200)}`);
+    }
+  }
+  const json = (await res.json()) as ResponsesApiResult;
+  if (!res.ok) throw new Error(`OpenAI ${res.status}: ${json.error?.message ?? "Fehler"}`);
+
+  const usage = json.usage ?? { input_tokens: 0, output_tokens: 0 };
+  db.prepare("INSERT INTO llm_usage (at, model, purpose, input_tokens, output_tokens, cost_usd) VALUES (?, ?, ?, ?, ?, ?)").run(
+    Date.now(),
+    model,
+    opts.purpose,
+    usage.input_tokens,
+    usage.output_tokens,
+    costUsd(model, usage.input_tokens, usage.output_tokens),
+  );
+
+  const text = json.output?.find((o) => o.type === "message")?.content?.find((c) => c.type === "output_text")?.text;
+  if (!text) throw new Error("OpenAI: leere Antwort");
+  return JSON.parse(text) as T;
+}

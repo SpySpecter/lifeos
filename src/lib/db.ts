@@ -50,6 +50,59 @@ const MIGRATIONS: string[] = [
     created_at INTEGER NOT NULL
   );
   `,
+  `
+  CREATE TABLE settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+  );
+  CREATE TABLE mail_items (
+    account      TEXT NOT NULL,
+    id           TEXT NOT NULL,
+    thread_id    TEXT,
+    from_name    TEXT NOT NULL,
+    from_email   TEXT NOT NULL,
+    subject      TEXT NOT NULL,
+    snippet      TEXT NOT NULL,
+    date         INTEGER NOT NULL,
+    category     TEXT,
+    action       TEXT,
+    status       TEXT NOT NULL,
+    confidence   REAL,
+    reason       TEXT,
+    source       TEXT,
+    processed_at INTEGER NOT NULL,
+    decided_at   INTEGER,
+    PRIMARY KEY (account, id)
+  );
+  CREATE INDEX mail_items_status ON mail_items (status, processed_at);
+  CREATE TABLE mail_rules (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    match_type TEXT NOT NULL,
+    pattern    TEXT NOT NULL,
+    action     TEXT NOT NULL,
+    category   TEXT,
+    source     TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    UNIQUE (match_type, pattern)
+  );
+  CREATE TABLE mail_runs (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    started_at  INTEGER NOT NULL,
+    finished_at INTEGER,
+    trigger     TEXT NOT NULL,
+    summary     TEXT,
+    error       TEXT
+  );
+  CREATE TABLE llm_usage (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    at            INTEGER NOT NULL,
+    model         TEXT NOT NULL,
+    purpose       TEXT NOT NULL,
+    input_tokens  INTEGER NOT NULL,
+    output_tokens INTEGER NOT NULL,
+    cost_usd      REAL NOT NULL
+  );
+  `,
 ];
 
 export type DB = DatabaseSync;

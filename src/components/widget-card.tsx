@@ -25,7 +25,7 @@ export function WidgetCard({
   children: ReactNode;
 }) {
   return (
-    <section className={cn("flex flex-col rounded-2xl bg-card p-4 ring-1 ring-foreground/8 sm:p-5", className)}>
+    <section className={cn("flex h-full flex-col rounded-2xl bg-card p-4 ring-1 ring-foreground/8 sm:p-5", className)}>
       <header className="mb-3 flex items-center gap-2">
         <Icon className="size-4 text-muted-foreground" aria-hidden />
         <h2 className="text-sm font-medium text-muted-foreground">
@@ -94,7 +94,7 @@ export function ResultView<T>({
 
 export function WidgetSkeleton({ className, lines = 4 }: { className?: string; lines?: number }) {
   return (
-    <section className={cn("rounded-2xl bg-card p-4 ring-1 ring-foreground/8 sm:p-5", className)} aria-busy="true">
+    <section className={cn("h-full rounded-2xl bg-card p-4 ring-1 ring-foreground/8 sm:p-5", className)} aria-busy="true">
       <div className="mb-4 h-4 w-28 animate-pulse rounded bg-muted" />
       <div className="space-y-3">
         {Array.from({ length: lines }, (_, i) => (

@@ -1,22 +1,23 @@
 import { CalendarClock, GraduationCap, ListChecks, Mail } from "lucide-react";
 import type { ReactNode } from "react";
-import { currentDay, loadGoogle, loadHabits, loadUntis } from "@/integrations/loaders";
+import { currentDay, loadGoogle, loadHabits, loadSettings, loadUntis } from "@/integrations/loaders";
+import { parseCourse } from "@/lib/courses";
 import { formatDayLong, formatTime, greeting } from "@/lib/time";
 
 function Chip({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
   return (
-    <div className="flex min-w-0 items-center gap-3 rounded-xl bg-card px-3 py-2.5 ring-1 ring-foreground/8">
-      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">{icon}</span>
+    <div className="flex min-w-0 items-center gap-2.5 rounded-xl bg-card px-2.5 py-2 ring-1 ring-foreground/8 sm:gap-3 sm:px-3 sm:py-2.5">
+      <span className="hidden size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground min-[400px]:grid">{icon}</span>
       <div className="min-w-0">
         <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="truncate text-sm font-medium">{value}</p>
+        <p className="truncate text-[13px] font-medium sm:text-sm">{value}</p>
       </div>
     </div>
   );
 }
 
 export async function TodayHero() {
-  const [day, untis, google, habits] = await Promise.all([currentDay(), loadUntis(), loadGoogle(), loadHabits(7)]);
+  const [day, untis, google, habits, settings] = await Promise.all([currentDay(), loadUntis(), loadGoogle(), loadHabits(7), loadSettings()]);
   const now = new Date();
   const nowTime = formatTime(now);
 
@@ -27,7 +28,7 @@ export async function TodayHero() {
       .find((l) => l.status !== "cancelled" && (l.day > day || (l.day === day && l.end > nowTime)));
     if (lesson) {
       const when = lesson.day === day ? lesson.start : `${new Date(`${lesson.day}T12:00:00Z`).toLocaleDateString("de-DE", { weekday: "short", timeZone: "UTC" })} ${lesson.start}`;
-      nextLesson = `${lesson.subjectLong ?? lesson.subject} · ${when}${lesson.rooms.length ? ` · ${lesson.rooms[0]}` : ""}`;
+      nextLesson = `${parseCourse(lesson.subject).title} · ${when}${lesson.rooms.length ? ` · ${lesson.rooms[0]}` : ""}`;
     } else nextLesson = "Kein Unterricht mehr";
   } else if (untis.status === "unconfigured") nextLesson = "Nicht verbunden";
 
@@ -36,7 +37,7 @@ export async function TodayHero() {
   if (google.status === "ok") {
     const e = google.data.events.find((ev) => (ev.allDay ? ev.start.slice(0, 10) >= day : new Date(ev.end) > now));
     nextEvent = e ? `${e.title} · ${e.allDay ? new Date(`${e.start.slice(0, 10)}T12:00:00Z`).toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "numeric", timeZone: "UTC" }) : formatTime(e.start)}` : "Keine Termine";
-    unread = `${google.data.mail.unread} ungelesen`;
+    unread = `${google.data.mail.reduce((n, a) => n + a.unread, 0)} ungelesen`;
   } else if (google.status === "unconfigured") {
     nextEvent = unread = "Nicht verbunden";
   }
@@ -47,9 +48,9 @@ export async function TodayHero() {
     <section className="space-y-4">
       <div>
         <p className="text-sm text-muted-foreground">{formatDayLong(day)}</p>
-        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{greeting(now)} 👋</h1>
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{greeting(now)}{settings.displayName ? `, ${settings.displayName}` : ""} 👋</h1>
       </div>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
         <Chip icon={<GraduationCap className="size-4" />} label="Nächste Stunde" value={nextLesson} />
         <Chip icon={<CalendarClock className="size-4" />} label="Nächster Termin" value={nextEvent} />
         <Chip
@@ -70,7 +71,7 @@ export function TodayHeroSkeleton() {
         <div className="h-4 w-40 animate-pulse rounded bg-muted" />
         <div className="h-9 w-64 animate-pulse rounded bg-muted" />
       </div>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
         {Array.from({ length: 4 }, (_, i) => (
           <div key={i} className="h-[60px] animate-pulse rounded-xl bg-card ring-1 ring-foreground/8" />
         ))}

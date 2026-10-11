@@ -3,7 +3,9 @@ import { cookies } from "next/headers";
 import { connection } from "next/server";
 import { cache } from "react";
 import { db } from "@/lib/db";
-import { env } from "@/lib/env";
+import { env, isDemo } from "@/lib/env";
+import { mailAssistantData, type MailAssistantData } from "@/lib/mail/triage";
+import { getSettings } from "@/lib/settings";
 import { listHabits } from "@/lib/habits";
 import { healthSeries } from "@/lib/health";
 import { lastDays, today } from "@/lib/time";
@@ -27,8 +29,9 @@ export const LOCATION_COOKIE = "lifeos_loc";
 export const loadWeather = cache(async () => {
   const raw = (await cookies()).get(LOCATION_COOKIE)?.value;
   const [lat, lon] = (raw ?? "").split(",").map(Number);
-  const coords: Coords =
-    Number.isFinite(lat) && Number.isFinite(lon) && raw ? { lat, lon } : { lat: env().DEFAULT_LAT, lon: env().DEFAULT_LON };
+  const place = (await loadSettings()).defaultPlace;
+  const fallback: Coords = place ? { lat: place.lat, lon: place.lon } : { lat: env().DEFAULT_LAT, lon: env().DEFAULT_LON };
+  const coords: Coords = Number.isFinite(lat) && Number.isFinite(lon) && raw ? { lat, lon } : fallback;
   return { located: Boolean(raw), result: await load(weather, coords) };
 });
 
@@ -43,3 +46,40 @@ export const loadHealth = cache(async (days: number) => {
   const range = lastDays(await currentDay(), days);
   return { days: range, series: healthSeries(db(), range) };
 });
+
+export const loadSettings = cache(async () => {
+  await connection();
+  return getSettings(db());
+});
+
+/** null = kein Google-Konto verbunden */
+export const loadMailAssistant = cache(async (): Promise<MailAssistantData | null> => {
+  await connection();
+  if (isDemo()) return mockMailAssistant();
+  if (!env().GOOGLE_CLIENT_ID) return null;
+  const data = await mailAssistantData(db());
+  return data;
+});
+
+function mockMailAssistant(): MailAssistantData {
+  const ago = (min: number) => Date.now() - min * 60_000;
+  const acc = "luis@example.com";
+  return {
+    pending: [
+      { account: acc, id: "p1", fromName: "Studienkreis", subject: "Kostenlose Probestunde für dein Abi", category: "werbung", action: "trash", reason: "Werbung, aber evtl. relevant fürs Abi", confidence: 0.55, processedAt: ago(30) },
+      { account: acc, id: "p2", fromName: "Discord", subject: "Du hast 12 neue Nachrichten", category: "social", action: "archive", reason: "Benachrichtigung, unklar ob gelesen", confidence: 0.58, processedAt: ago(30) },
+    ],
+    recent: [
+      { account: acc, id: "r1", fromName: "Zalando", subject: "Nur heute: -30 % auf alles", category: "werbung", action: "trash", reason: "Rabattaktion", confidence: 0.97, processedAt: ago(30) },
+      { account: acc, id: "r2", fromName: "GitHub", subject: "[SpySpecter/lifeos] Dependabot alert", category: "benachrichtigung", action: "archive", reason: "Entwickler-Benachrichtigung", confidence: 0.92, processedAt: ago(30) },
+      { account: acc, id: "r3", fromName: "Instagram", subject: "Neue Follower-Anfragen", category: "social", action: "trash", reason: "Social-Media-Benachrichtigung", confidence: 0.9, processedAt: ago(30) },
+      { account: acc, id: "r4", fromName: "heise Newsletter", subject: "Die Woche bei heise", category: "newsletter", action: "archive", reason: "Newsletter, manchmal gelesen", confidence: 0.84, processedAt: ago(30) },
+    ],
+    today: { archived: 14, trashed: 23, kept: 6 },
+    lastRun: { at: ago(30), summary: { accounts: 1, scanned: 45, kept: 6, archived: 14, trashed: 23, pending: 2, notes: [] }, error: null },
+    needsReconnect: [],
+    aiConfigured: true,
+    monthUsd: 0.04,
+    budgetUsd: 1,
+  };
+}

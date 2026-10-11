@@ -2,7 +2,8 @@ import "server-only";
 import { decrypt, encrypt, randomToken } from "./crypto";
 import { db } from "./db";
 
-export type Provider = "google" | "spotify";
+/** "spotify" oder "google:<e-mail>" (ein Eintrag je verbundenem Google-Konto). Für OAuth-State: "google" | "spotify". */
+export type Provider = string;
 
 export type StoredToken = {
   accessToken: string;
@@ -21,6 +22,16 @@ export function getToken(provider: Provider): StoredToken | null {
   }
 }
 
+export function listProviders(prefix: string): string[] {
+  return (db().prepare("SELECT provider FROM tokens WHERE provider LIKE ? ORDER BY updated_at").all(`${prefix}%`) as { provider: string }[]).map(
+    (r) => r.provider,
+  );
+}
+
+export function renameToken(from: Provider, to: Provider): void {
+  db().prepare("UPDATE OR REPLACE tokens SET provider = ? WHERE provider = ?").run(to, from);
+}
+
 export function saveToken(provider: Provider, token: StoredToken): void {
   db()
     .prepare(
@@ -32,7 +43,7 @@ export function saveToken(provider: Provider, token: StoredToken): void {
 
 export function deleteToken(provider: Provider): void {
   db().prepare("DELETE FROM tokens WHERE provider = ?").run(provider);
-  db().prepare("DELETE FROM cache WHERE key LIKE ?").run(`${provider}:%`);
+  db().prepare("DELETE FROM cache WHERE key LIKE ?").run(`${provider.split(":")[0]}:%`);
 }
 
 const STATE_TTL_MS = 10 * 60 * 1000;

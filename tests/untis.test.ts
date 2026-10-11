@@ -74,3 +74,20 @@ describe("buildWeek", () => {
     expect(week.changes).toHaveLength(1);
   });
 });
+
+import { parseCourse } from "@/lib/courses";
+
+describe("parseCourse", () => {
+  it.each([
+    ["LK If 1", "Informatik", "LK"],
+    ["GK Pb 2", "Politische Bildung", "GK"],
+    ["SK Sk 3", "Seminarkurs", "Seminarkurs"],
+    ["GK Sp 1", "Sport", "GK"],
+    ["LK Ma 1", "Mathematik", "LK"],
+    ["GK Xy 1", "Xy 1", "GK"],
+    ["M", "M", null],
+    ["Ph", "Physik", null],
+  ])("%s → %s (%s)", (raw, title, kind) => {
+    expect(parseCourse(raw)).toMatchObject({ title, kind });
+  });
+});

@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import { disconnectAction } from "@/app/actions";
 import { Button } from "./ui/button";
 
-export function DisconnectButton({ provider }: { provider: "google" | "spotify" }) {
+export function DisconnectButton({ provider, label = "Trennen" }: { provider: string; label?: string }) {
   const [pending, start] = useTransition();
   return (
     <Button
@@ -15,7 +15,7 @@ export function DisconnectButton({ provider }: { provider: "google" | "spotify" 
         if (confirm("Verbindung trennen? Gespeicherte Tokens werden gelöscht.")) start(() => disconnectAction(provider));
       }}
     >
-      Trennen
+      {label}
     </Button>
   );
 }

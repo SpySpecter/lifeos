@@ -30,8 +30,8 @@ async function UserBadge() {
   await connection();
   if (isDemo()) {
     return (
-      <span className="rounded-full bg-series-4/15 px-2.5 py-1 text-xs font-medium text-foreground ring-1 ring-series-4/40">
-        Demo-Daten
+      <span className="rounded-full bg-series-4/15 px-2.5 py-1 text-xs font-medium whitespace-nowrap text-foreground ring-1 ring-series-4/40">
+        Demo
       </span>
     );
   }

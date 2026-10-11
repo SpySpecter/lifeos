@@ -1,7 +1,8 @@
 import { GraduationCap } from "lucide-react";
 import { currentDay, loadUntis } from "@/integrations/loaders";
 import type { SchoolLesson } from "@/integrations/untis";
-import { formatDayLong } from "@/lib/time";
+import { parseCourse } from "@/lib/courses";
+import { DEFAULT_TZ, formatDayLong } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { Badge } from "../ui/badge";
 import { ResultView, WidgetCard } from "../widget-card";
@@ -9,6 +10,8 @@ import { ResultView, WidgetCard } from "../widget-card";
 function LessonRow({ lesson, now }: { lesson: SchoolLesson; now: string | null }) {
   const cancelled = lesson.status === "cancelled";
   const current = now !== null && lesson.start <= now && now < lesson.end;
+  const course = parseCourse(lesson.subject);
+  const title = course.kind || !lesson.subjectLong ? course.title : lesson.subjectLong;
   return (
     <li
       className={cn(
@@ -22,8 +25,11 @@ function LessonRow({ lesson, now }: { lesson: SchoolLesson; now: string | null }
         {lesson.end}
       </span>
       <div className="min-w-0">
-        <p className={cn("truncate font-medium", cancelled && "text-muted-foreground line-through")}>
-          {lesson.subjectLong ?? lesson.subject}
+        <p className={cn("flex items-center gap-1.5 font-medium", cancelled && "text-muted-foreground line-through")}>
+          <span className="truncate">{title}</span>
+          {course.kind === "LK" ? (
+            <span className="rounded bg-series-1/15 px-1 text-[10px] font-semibold text-series-1">LK</span>
+          ) : null}
         </p>
         <p className="truncate text-xs text-muted-foreground">
           {[lesson.rooms.join(", "), lesson.teachers.join(", ")].filter(Boolean).join(" · ")}
@@ -47,7 +53,7 @@ function LessonRow({ lesson, now }: { lesson: SchoolLesson; now: string | null }
 
 export async function SchoolWidget({ className }: { className?: string }) {
   const [result, day] = await Promise.all([loadUntis(), currentDay()]);
-  const nowTime = new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Berlin" }).format(new Date());
+  const nowTime = new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit", timeZone: DEFAULT_TZ }).format(new Date());
   return (
     <WidgetCard title="Schule" icon={GraduationCap} className={className}>
       <ResultView result={result} integration="untis">

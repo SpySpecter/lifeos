@@ -93,6 +93,8 @@ if [[ ! -f .env ]]; then
   sed -i "s|^INGEST_TOKEN=.*|INGEST_TOKEN=$(openssl rand -base64 24 | tr '+/' '-_' | tr -d '=')|" .env
   echo "Neue .env angelegt (Schlüssel generiert). API-Zugangsdaten bitte selbst eintragen: sudo nano $APP_DIR/.env"
 fi
+# Nachträglich hinzugekommene Schlüssel ergänzen (ältere .env-Dateien)
+grep -q '^CRON_TOKEN=.\+' .env || { sed -i '/^CRON_TOKEN=/d' .env; echo "CRON_TOKEN=$(openssl rand -hex 24)" >> .env; }
 chmod 600 .env
 
 log "Container starten"
@@ -103,12 +105,12 @@ log "Im Tailnet veröffentlichen (tailscale serve, kein Funnel)"
 tailscale serve --bg --https=443 http://127.0.0.1:3000
 tailscale serve status
 
-log "Auto-Update (alle 10 min) und nächtliches Backup"
+log "Timer: Auto-Update (10 min), Backup (03:30), Mail-Assistent (06:00 + 16:00)"
 for unit in deploy/systemd/*.service deploy/systemd/*.timer; do
   sed "s|/opt/lifeos|$APP_DIR|g" "$unit" > "/etc/systemd/system/$(basename "$unit")"
 done
 systemctl daemon-reload
-systemctl enable --now lifeos-update.timer lifeos-backup.timer
+systemctl enable --now lifeos-update.timer lifeos-backup.timer lifeos-mail.timer
 
 log "Fertig"
 echo "Dashboard:  https://$(ts_dns)"

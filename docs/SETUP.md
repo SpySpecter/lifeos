@@ -66,7 +66,23 @@ Nach jeder Änderung: `sudo docker compose up -d --no-build` (startet den Contai
 5. Client-ID und Client-Secret in die `.env`, Container neu starten.
 6. Im Dashboard: **Einstellungen → Mit Google verbinden**.
 
-Benötigte Berechtigungen: `calendar.readonly`, `gmail.readonly`, `drive.metadata.readonly`. LifeOS kann nichts senden, löschen oder ändern.
+Benötigte Berechtigungen: `calendar.readonly`, `drive.metadata.readonly` und `gmail.modify` (für den Mail-Assistenten: Labels setzen, archivieren, in den Papierkorb legen). LifeOS sendet keine Mails und löscht nie endgültig.
+
+---
+
+### Mail-Assistent
+
+Der Assistent sortiert um 06:00 und 16:00 alle verbundenen Postfächer (Timer `lifeos-mail.timer`):
+
+- **Schutz zuerst:** markierte Mails und Sicherheits-/Login-Mails werden nie angefasst; Schule, Finanzen, Konten und persönliche Mails bleiben immer im Posteingang.
+- **Regeln:** eigene und gelernte Absender-Regeln (Einstellungen → Mail-Assistent) greifen vor der KI.
+- **KI** (`gpt-6-luna`): bekommt nur Absender, Betreff und die Gmail-Vorschau (max. 220 Zeichen). Eindeutige Werbung/Spam → Papierkorb (30 Tage wiederherstellbar), Infos ohne Handlungsbedarf → Archiv, Unsicheres → Widget „Mail-Assistent“ zur Entscheidung.
+- **Lernen:** jede Entscheidung und jedes „Rückgängig“ wird als Absender-Regel gespeichert.
+- **Kosten:** Monatsdeckel `OPENAI_MONTHLY_BUDGET_USD` (Standard 1 $); bei ~150 Mails/Tag fallen grob 0,10–0,20 $ an.
+
+Einrichten: `OPENAI_API_KEY` in die `.env` (Key unter [platform.openai.com/api-keys](https://platform.openai.com/api-keys), dort am besten auch ein Monatslimit setzen), Container neu starten. Google-Konten, die vor dem Mail-Assistenten verbunden wurden, einmal **neu verbinden** (Gmail braucht jetzt Schreibrechte). Weitere Konten: Einstellungen → „Weiteres Google-Konto verbinden“.
+
+Manuell auslösen: Knopf „Jetzt sortieren“ im Widget oder `sudo systemctl start lifeos-mail`.
 
 ---
 

@@ -23,13 +23,14 @@ Runs 24/7 on a 5 € VPS and is reachable **only inside my Tailscale network**.
 |---|---|---|
 | 🎓 **School** | WebUntis | Today/next school day, double lessons merged, cancellations & substitutions highlighted |
 | 📅 **Calendar** | Google Calendar | All visible calendars, next 7 days |
-| ✉️ **Mail & Drive** | Gmail, Google Drive | Unread count, latest unread mails, recently edited files (read-only scopes) |
+| 🤖 **Mail assistant** | Gmail + OpenAI (`gpt-6-luna`) | Twice-daily triage of all connected inboxes: labels, archive, trash (recoverable). Hard safety rules + learned sender rules run before the model; uncertain mails wait for a one-tap decision; every action can be undone. Monthly cost cap |
+| ✉️ **Inbox & Drive** | Gmail, Google Drive | Multiple Google accounts, unread per account, latest unread mails, recently edited files |
 | 🌦 **Weather** | Open-Meteo | Uses the browser's location (rounded to ~1 km), hourly + 5-day forecast |
 | ✅ **Habits** | local SQLite | Check off with optimistic UI, streaks, 16-week heatmap |
 | ❤️ **Health** | iPhone Shortcut → Apple Health | Daily automation posts steps, sleep, workouts, energy, resting HR; manual entry; 14/30/90-day charts |
 | 🧑‍💻 **GitHub** | GraphQL API | Contribution heatmap, recently pushed repos with CI status, open PRs |
 | 🎵 **Music** | Spotify Web API | Now playing, recently played, top artists (PKCE, dev-mode-compatible endpoints only) |
-| 📰 **News** | RSS / Atom | Tagesschau + heise, interleaved by source |
+| 📰 **News** | RSS / Atom | Tagesschau, politics, regional (rbb24), blue-light reports, heise, The Verge, Hacker News – category tabs, local stories pinned |
 
 Plus: dark/light theme, installable PWA for the iPhone home screen, per-widget streaming & error isolation, stale-while-error caching.
 
@@ -69,6 +70,7 @@ flowchart LR
 - **One integration contract.** Every data source implements `Integration<T>` (`fetch`, `mock`, `missingConfig`, `ttlSeconds`). `load()` handles caching, demo mode, "not configured" and error states uniformly, so a broken API only affects its own card.
 - **No native dependencies.** SQLite comes from Node's built-in `node:sqlite`, so the image needs no build toolchain; migrations run via `PRAGMA user_version`.
 - **Secrets stay server-side.** OAuth refresh tokens are encrypted with AES-256-GCM; Google/Spotify scopes are read-only; the health ingest endpoint uses its own bearer token with constant-time comparison.
+- **AI with guardrails.** The mail assistant only sends sender, subject and Gmail's preview to the model, and its suggestions pass through deterministic rules (`src/lib/mail/policy.ts`): protected categories are never removed, deletion needs high confidence, nothing is ever permanently deleted. An end-to-end test runs the whole flow against mocked Gmail/OpenAI APIs and asserts exactly which calls happen.
 - **Cache Components / PPR.** The static shell renders instantly; each widget streams in behind its own `<Suspense>` boundary.
 
 More detail in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -88,7 +90,7 @@ npm run dev:demo        # http://localhost:3000 with demo data, no keys needed
 With real data: `cp .env.example .env`, fill in what you want (every integration is optional), then `npm run dev`.
 
 ```bash
-npm test                # 50+ unit tests (parsers, cache, auth, ingest API)
+npm test                # ~100 tests (parsers, cache, auth, ingest API, mail triage end-to-end)
 npm run lint && npm run typecheck
 docker compose up --build
 ```

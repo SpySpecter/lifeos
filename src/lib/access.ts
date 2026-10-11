@@ -9,7 +9,7 @@ export type AccessConfig = { demo: boolean; requireTailscale: boolean; allowedUs
 export type AccessDecision = { allowed: true; user: string | null } | { allowed: false; status: 401 | 403; reason: string };
 
 /** Pfade mit eigener Authentifizierung bzw. ohne sensible Daten. */
-const PUBLIC_PATHS = [/^\/api\/health$/, /^\/api\/ingest\//, /^\/manifest\.webmanifest$/, /^\/icon/, /^\/apple-icon/];
+const PUBLIC_PATHS = [/^\/api\/health$/, /^\/api\/ingest\//, /^\/api\/jobs\//, /^\/manifest\.webmanifest$/, /^\/icon/, /^\/apple-icon/];
 
 export function checkAccess(path: string, login: string | null, cfg: AccessConfig): AccessDecision {
   if (cfg.demo || !cfg.requireTailscale) return { allowed: true, user: login };

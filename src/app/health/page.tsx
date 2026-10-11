@@ -4,7 +4,7 @@ import { Suspense } from "react";
 import { HealthChart } from "@/components/health-chart";
 import { HealthForm } from "@/components/health-form";
 import { WidgetSkeleton } from "@/components/widget-card";
-import { currentDay, loadHealth } from "@/integrations/loaders";
+import { currentDay, loadHealth, loadSettings } from "@/integrations/loaders";
 import { METRICS, METRIC_KEYS, average, type Metric } from "@/lib/health";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +18,8 @@ async function Charts({ searchParams }: { searchParams: Promise<{ range?: string
   const range = (RANGES as readonly number[]).includes(requested) ? requested : 30;
   const { days, series } = await loadHealth(range);
   const today = await currentDay();
+  const { goals } = await loadSettings();
+  const goalFor = (k: Metric) => (k in goals ? goals[k as keyof typeof goals] : null);
 
   return (
     <div className="space-y-6">
@@ -54,7 +56,7 @@ async function Charts({ searchParams }: { searchParams: Promise<{ range?: string
                   {m.unit.startsWith("/") ? m.unit : ` ${m.unit}`}
                 </p>
               </header>
-              <HealthChart data={data} kind={KIND[k]} unit={m.unit} digits={m.digits} goal={m.goal} domain={k === "mood" ? [1, 5] : undefined} />
+              <HealthChart data={data} kind={KIND[k]} unit={m.unit} digits={m.digits} goal={goalFor(k)} domain={k === "mood" ? [1, 5] : undefined} />
               <details className="mt-2 text-xs text-muted-foreground">
                 <summary className="cursor-pointer select-none">Als Tabelle</summary>
                 <table className="mt-2 w-full tabular-nums">

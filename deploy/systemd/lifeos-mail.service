@@ -1,0 +1,9 @@
+[Unit]
+Description=LifeOS: Posteingang sortieren (Mail-Assistent)
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=/opt/lifeos/.env
+ExecStart=/bin/sh -c 'curl -fsS --max-time 900 -X POST -H "Authorization: Bearer $CRON_TOKEN" http://127.0.0.1:3000/api/jobs/mail-triage'

@@ -1,52 +1,69 @@
+import type { ReactNode } from "react";
 import { Suspense } from "react";
 import { CalendarWidget } from "@/components/widgets/calendar-widget";
 import { GitHubWidget } from "@/components/widgets/github-widget";
 import { HabitsWidget } from "@/components/widgets/habits-widget";
 import { HealthWidget } from "@/components/widgets/health-widget";
 import { InboxWidget } from "@/components/widgets/inbox-widget";
+import { MailAssistantWidget } from "@/components/widgets/mail-assistant-widget";
 import { NewsWidget } from "@/components/widgets/news-widget";
 import { SchoolWidget } from "@/components/widgets/school-widget";
 import { SpotifyWidget } from "@/components/widgets/spotify-widget";
 import { TodayHero, TodayHeroSkeleton } from "@/components/widgets/today-hero";
 import { WeatherWidget } from "@/components/widgets/weather-widget";
 import { WidgetSkeleton } from "@/components/widget-card";
+import { cn } from "@/lib/utils";
 
-// Jedes Widget lädt unabhängig und streamt nach, sobald seine Quelle antwortet.
+/**
+ * Reihenfolge im DOM = Reihenfolge auf dem Handy (das Wichtigste für unterwegs zuerst).
+ * Ab xl ordnet `order` die Kacheln für drei Spalten neu.
+ */
+function Slot({ desktop, lines = 5, className, children }: { desktop: string; lines?: number; className?: string; children: ReactNode }) {
+  return (
+    <div className={cn(desktop, className)}>
+      <Suspense fallback={<WidgetSkeleton lines={lines} />}>{children}</Suspense>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 sm:space-y-6">
       <Suspense fallback={<TodayHeroSkeleton />}>
         <TodayHero />
       </Suspense>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <Suspense fallback={<WidgetSkeleton lines={6} />}>
+      <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <Slot desktop="xl:order-1" lines={6}>
           <SchoolWidget />
-        </Suspense>
-        <Suspense fallback={<WidgetSkeleton lines={6} />}>
-          <CalendarWidget />
-        </Suspense>
-        <Suspense fallback={<WidgetSkeleton lines={5} />}>
-          <WeatherWidget />
-        </Suspense>
-        <Suspense fallback={<WidgetSkeleton lines={5} />}>
+        </Slot>
+        <Slot desktop="xl:order-2" lines={6}>
+          <MailAssistantWidget />
+        </Slot>
+        <Slot desktop="xl:order-6">
           <HabitsWidget />
-        </Suspense>
-        <Suspense fallback={<WidgetSkeleton lines={5} />}>
-          <HealthWidget />
-        </Suspense>
-        <Suspense fallback={<WidgetSkeleton lines={5} />}>
+        </Slot>
+        <Slot desktop="xl:order-3">
+          <WeatherWidget />
+        </Slot>
+        <Slot desktop="xl:order-4">
+          <CalendarWidget />
+        </Slot>
+        <Slot desktop="xl:order-5">
           <InboxWidget />
-        </Suspense>
-        <Suspense fallback={<WidgetSkeleton lines={6} />}>
-          <GitHubWidget className="md:col-span-2 xl:col-span-1" />
-        </Suspense>
-        <Suspense fallback={<WidgetSkeleton lines={5} />}>
-          <SpotifyWidget />
-        </Suspense>
-        <Suspense fallback={<WidgetSkeleton lines={6} />}>
+        </Slot>
+        <Slot desktop="xl:order-7">
+          <HealthWidget />
+        </Slot>
+        <Slot desktop="xl:order-8" lines={6}>
           <NewsWidget />
-        </Suspense>
+        </Slot>
+        <Slot desktop="xl:order-9">
+          <SpotifyWidget />
+        </Slot>
+        <Slot desktop="xl:order-10" className="md:col-span-2 xl:col-span-1">
+          <GitHubWidget />
+        </Slot>
       </div>
     </div>
   );
