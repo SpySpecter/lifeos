@@ -1,48 +1,46 @@
-import { CalendarClock, GraduationCap, ListChecks, Mail } from "lucide-react";
+import { CalendarX2, CloudSun, GraduationCap, NotebookPen } from "lucide-react";
 import type { ReactNode } from "react";
-import { currentDay, loadGoogle, loadHabits, loadSettings, loadUntis } from "@/integrations/loaders";
-import { parseCourse } from "@/lib/courses";
+import { currentDay, loadExams, loadSettings, loadUntis, loadWeather } from "@/integrations/loaders";
+import { changesText, type ChipText, nextExamText, nextLessonText, weatherText } from "@/lib/hero";
 import { formatDayLong, formatTime, greeting } from "@/lib/time";
+import { cn } from "@/lib/utils";
 
-function Chip({ icon, label, value }: { icon: ReactNode; label: string; value: string }) {
+const OFF: ChipText = { value: "Nicht verbunden", tone: "normal" };
+const ERR: ChipText = { value: "Gerade nicht erreichbar", tone: "normal" };
+
+function Chip({ icon, label, text, href }: { icon: ReactNode; label: string; text: ChipText; href: string }) {
   return (
-    <div className="flex min-w-0 items-center gap-2.5 rounded-xl bg-card px-2.5 py-2 ring-1 ring-foreground/8 sm:gap-3 sm:px-3 sm:py-2.5">
-      <span className="hidden size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground min-[400px]:grid">{icon}</span>
+    <a
+      href={href}
+      className="flex min-w-0 items-center gap-2.5 rounded-xl bg-card px-2.5 py-2 ring-1 ring-foreground/8 transition-colors hover:bg-muted/60 active:bg-muted sm:gap-3 sm:px-3 sm:py-2.5"
+    >
+      <span
+        className={cn(
+          "hidden size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground min-[400px]:grid",
+          text.tone === "warning" && "bg-warning/15 text-foreground",
+          text.tone === "critical" && "bg-critical/15 text-critical",
+        )}
+      >
+        {icon}
+      </span>
       <div className="min-w-0">
         <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="truncate text-[13px] font-medium sm:text-sm">{value}</p>
+        <p className="line-clamp-2 text-[13px] leading-snug font-medium sm:truncate sm:text-sm">{text.value}</p>
       </div>
-    </div>
+    </a>
   );
 }
 
 export async function TodayHero() {
-  const [day, untis, google, habits, settings] = await Promise.all([currentDay(), loadUntis(), loadGoogle(), loadHabits(7), loadSettings()]);
+  const [day, untis, examList, weather, settings] = await Promise.all([currentDay(), loadUntis(), loadExams(), loadWeather(), loadSettings()]);
   const now = new Date();
   const nowTime = formatTime(now);
 
-  let nextLesson = "–";
-  if (untis.status === "ok") {
-    const lesson = untis.data.days
-      .flatMap((d) => d.lessons)
-      .find((l) => l.status !== "cancelled" && (l.day > day || (l.day === day && l.end > nowTime)));
-    if (lesson) {
-      const when = lesson.day === day ? lesson.start : `${new Date(`${lesson.day}T12:00:00Z`).toLocaleDateString("de-DE", { weekday: "short", timeZone: "UTC" })} ${lesson.start}`;
-      nextLesson = `${parseCourse(lesson.subject).title} · ${when}${lesson.rooms.length ? ` · ${lesson.rooms[0]}` : ""}`;
-    } else nextLesson = "Kein Unterricht mehr";
-  } else if (untis.status === "unconfigured") nextLesson = "Nicht verbunden";
-
-  let nextEvent = "–";
-  let unread = "–";
-  if (google.status === "ok") {
-    const e = google.data.events.find((ev) => (ev.allDay ? ev.start.slice(0, 10) >= day : new Date(ev.end) > now));
-    nextEvent = e ? `${e.title} · ${e.allDay ? new Date(`${e.start.slice(0, 10)}T12:00:00Z`).toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "numeric", timeZone: "UTC" }) : formatTime(e.start)}` : "Keine Termine";
-    unread = `${google.data.mail.reduce((n, a) => n + a.unread, 0)} ungelesen`;
-  } else if (google.status === "unconfigured") {
-    nextEvent = unread = "Nicht verbunden";
-  }
-
-  const open = habits.filter((h) => !h.doneToday).length;
+  const school = untis.status === "ok" ? untis.data : null;
+  const lesson = school ? nextLessonText(school, day, nowTime) : untis.status === "unconfigured" ? OFF : ERR;
+  const changes = school ? changesText(school, day) : untis.status === "unconfigured" ? OFF : ERR;
+  const exam = examList.status === "ok" ? nextExamText(examList.data, day) : examList.status === "unconfigured" ? OFF : ERR;
+  const wx = weather.result.status === "ok" ? weatherText(weather.result.data) : ERR;
 
   return (
     <section className="space-y-4">
@@ -51,14 +49,10 @@ export async function TodayHero() {
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{greeting(now)}{settings.displayName ? `, ${settings.displayName}` : ""} 👋</h1>
       </div>
       <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
-        <Chip icon={<GraduationCap className="size-4" />} label="Nächste Stunde" value={nextLesson} />
-        <Chip icon={<CalendarClock className="size-4" />} label="Nächster Termin" value={nextEvent} />
-        <Chip
-          icon={<ListChecks className="size-4" />}
-          label="Gewohnheiten"
-          value={habits.length ? (open ? `${open} von ${habits.length} offen` : "Alles erledigt ✓") : "Noch keine"}
-        />
-        <Chip icon={<Mail className="size-4" />} label="Posteingang" value={unread} />
+        <Chip href="#schule" icon={<GraduationCap className="size-4" />} label="Nächste Stunde" text={lesson} />
+        <Chip href="#schule" icon={<CalendarX2 className="size-4" />} label="Ausfälle & Vertretungen" text={changes} />
+        <Chip href="#klausuren" icon={<NotebookPen className="size-4" />} label="Nächste Klausur" text={exam} />
+        <Chip href="#wetter" icon={<CloudSun className="size-4" />} label="Wetter" text={wx} />
       </div>
     </section>
   );

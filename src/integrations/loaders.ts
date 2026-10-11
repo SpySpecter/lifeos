@@ -11,6 +11,7 @@ import { healthSeries } from "@/lib/health";
 import { lastDays, today } from "@/lib/time";
 import { load } from "./core";
 import { github } from "./github";
+import { exams } from "./exams";
 import { google } from "./google";
 import { news } from "./news";
 import { spotify } from "./spotify";
@@ -20,6 +21,7 @@ import { weather, type Coords } from "./weather";
 // React `cache` dedupliziert pro Anfrage: mehrere Widgets teilen sich einen Abruf.
 export const loadUntis = cache(() => load(untis, undefined));
 export const loadGoogle = cache(() => load(google, undefined));
+export const loadExams = cache(() => load(exams, undefined));
 export const loadGitHub = cache(() => load(github, undefined));
 export const loadSpotify = cache(() => load(spotify, undefined));
 export const loadNews = cache(() => load(news, undefined));

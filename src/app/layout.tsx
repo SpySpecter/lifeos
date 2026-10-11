@@ -4,7 +4,8 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { Nav } from "@/components/nav";
+import { BottomNav, Nav } from "@/components/nav";
+import { PullToRefresh } from "@/components/pull-to-refresh";
 import { ThemeToggle, themeScript } from "@/components/theme-toggle";
 import { isDemo } from "@/lib/env";
 import "./globals.css";
@@ -20,6 +21,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
+  viewportFit: "cover",
   themeColor: [
     { media: "(prefers-color-scheme: light)", color: "#f4f4f1" },
     { media: "(prefers-color-scheme: dark)", color: "#111110" },
@@ -47,8 +49,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="min-h-full">
-        <div className="mx-auto flex min-h-full max-w-7xl flex-col px-4 pb-10 sm:px-6">
-          <header className="sticky top-0 z-10 -mx-4 flex items-center gap-3 bg-background/85 px-4 py-3 backdrop-blur sm:-mx-6 sm:px-6">
+        <div className="mx-auto flex min-h-full max-w-7xl flex-col px-[max(1rem,env(safe-area-inset-left))] pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-6 sm:pb-10">
+          <header className="sticky top-0 z-10 -mx-4 flex items-center gap-3 bg-background/85 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 backdrop-blur sm:-mx-6 sm:px-6">
             <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
               <span className="grid size-7 place-items-center rounded-lg bg-foreground text-sm text-background">L</span>
               <span className="hidden sm:inline">LifeOS</span>
@@ -61,8 +63,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <ThemeToggle />
             </div>
           </header>
+          <PullToRefresh />
           <main className="flex-1 pt-4">{children}</main>
         </div>
+        <BottomNav />
       </body>
     </html>
   );

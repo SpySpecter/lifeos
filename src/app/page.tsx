@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { Suspense } from "react";
 import { CalendarWidget } from "@/components/widgets/calendar-widget";
+import { ExamsWidget } from "@/components/widgets/exams-widget";
 import { GitHubWidget } from "@/components/widgets/github-widget";
 import { HabitsWidget } from "@/components/widgets/habits-widget";
 import { HealthWidget } from "@/components/widgets/health-widget";
@@ -18,9 +19,9 @@ import { cn } from "@/lib/utils";
  * Reihenfolge im DOM = Reihenfolge auf dem Handy (das Wichtigste für unterwegs zuerst).
  * Ab xl ordnet `order` die Kacheln für drei Spalten neu.
  */
-function Slot({ desktop, lines = 5, className, children }: { desktop: string; lines?: number; className?: string; children: ReactNode }) {
+function Slot({ id, desktop, lines = 5, className, children }: { id?: string; desktop: string; lines?: number; className?: string; children: ReactNode }) {
   return (
-    <div className={cn(desktop, className)}>
+    <div id={id} className={cn("scroll-mt-20", desktop, className)}>
       <Suspense fallback={<WidgetSkeleton lines={lines} />}>{children}</Suspense>
     </div>
   );
@@ -34,34 +35,37 @@ export default function Dashboard() {
       </Suspense>
 
       <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <Slot desktop="xl:order-1" lines={6}>
+        <Slot id="schule" desktop="xl:order-1" lines={6}>
           <SchoolWidget />
         </Slot>
-        <Slot desktop="xl:order-2" lines={6}>
-          <MailAssistantWidget />
+        <Slot id="klausuren" desktop="xl:order-2" lines={4}>
+          <ExamsWidget />
         </Slot>
         <Slot desktop="xl:order-6">
           <HabitsWidget />
         </Slot>
-        <Slot desktop="xl:order-3">
+        <Slot id="wetter" desktop="xl:order-3">
           <WeatherWidget />
         </Slot>
         <Slot desktop="xl:order-4">
           <CalendarWidget />
         </Slot>
-        <Slot desktop="xl:order-5">
-          <InboxWidget />
+        <Slot desktop="xl:order-5" lines={6}>
+          <MailAssistantWidget />
         </Slot>
         <Slot desktop="xl:order-7">
+          <InboxWidget />
+        </Slot>
+        <Slot desktop="xl:order-8">
           <HealthWidget />
         </Slot>
-        <Slot desktop="xl:order-8" lines={6}>
+        <Slot desktop="xl:order-9" lines={6}>
           <NewsWidget />
         </Slot>
-        <Slot desktop="xl:order-9">
+        <Slot desktop="xl:order-10">
           <SpotifyWidget />
         </Slot>
-        <Slot desktop="xl:order-10" className="md:col-span-2 xl:col-span-1">
+        <Slot desktop="xl:order-11" className="md:col-span-2 xl:col-span-1">
           <GitHubWidget />
         </Slot>
       </div>

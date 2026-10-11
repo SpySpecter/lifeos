@@ -79,7 +79,13 @@ export async function disconnectAction(provider: string) {
 
 /** Cache einer Integration leeren und neu laden (Aktualisieren-Knopf). */
 export async function refreshAction(integrationId: string) {
-  invalidate(db(), `${z.enum(["weather", "news", "github", "untis", "google", "spotify"]).parse(integrationId)}:`);
+  invalidate(db(), `${z.enum(["weather", "news", "github", "untis", "google", "spotify", "exams"]).parse(integrationId)}:`);
+  revalidatePath("/", "layout");
+}
+
+/** Ziehen zum Aktualisieren: alle API-Caches leeren (Bilder-Cache der News bleibt). */
+export async function refreshAllAction() {
+  for (const id of ["weather", "news", "github", "untis", "google", "spotify", "exams"]) invalidate(db(), `${id}:`);
   revalidatePath("/", "layout");
 }
 
