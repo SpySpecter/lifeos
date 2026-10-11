@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1.7
 # ── Abhängigkeiten ──────────────────────────────────────────────────────
-FROM node:24-alpine AS deps
+FROM node:25-alpine AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 
 # ── Build ───────────────────────────────────────────────────────────────
-FROM node:24-alpine AS build
+FROM node:25-alpine AS build
 WORKDIR /app
 ENV NEXT_TELEMETRY_DISABLED=1
 COPY --from=deps /app/node_modules ./node_modules
@@ -14,7 +14,7 @@ COPY . .
 RUN npm run build
 
 # ── Laufzeit: nur die Standalone-Ausgabe (~150 MB RAM im Betrieb) ───────
-FROM node:24-alpine AS runner
+FROM node:25-alpine AS runner
 WORKDIR /app
 RUN apk add --no-cache tzdata
 ENV NODE_ENV=production \
