@@ -6,6 +6,7 @@ import { SettingsLink } from "@/components/nav";
 import { PageHeader } from "@/components/page-header";
 import { NewDeckForm } from "@/components/flashcards";
 import { FocusButton } from "@/components/focus/focus-dock";
+import { StudyBars } from "@/components/study-bars";
 import { MaterialRow, MaterialUpload, StudyPlanForm, StudySessionList, type CostInfo } from "@/components/study";
 import { WidgetCard, WidgetSkeleton } from "@/components/widget-card";
 import { upcoming } from "@/integrations/exams";
@@ -47,7 +48,6 @@ async function StudyTimeCard() {
   const rows = studyTime(db(), weekRange(day, env().APP_TZ));
   const planned = rows.reduce((n, r) => n + r.planned, 0);
   const actual = rows.reduce((n, r) => n + r.actual, 0);
-  const max = Math.max(1, ...rows.map((r) => Math.max(r.planned, r.actual)));
   return (
     <WidgetCard
       title="Lernzeit diese Woche"
@@ -58,22 +58,9 @@ async function StudyTimeCard() {
           <p className="text-subhead text-muted-foreground tabular-nums">
             <span className="text-title2 font-bold text-foreground">{formatMinutes(actual)}</span> von {formatMinutes(planned)} geplant
           </p>
-          <ul className="mt-3 space-y-3" aria-label="Lernzeit pro Fach">
-            {rows.map((r) => (
-              <li key={r.subject} title={`${r.subject}: ${r.actual} von ${r.planned} Min.`}>
-                <div className="flex items-baseline justify-between gap-2 text-subhead">
-                  <span className="truncate font-medium">{r.subject}</span>
-                  <span className="shrink-0 text-muted-foreground tabular-nums">
-                    {r.actual} / {r.planned} Min.
-                  </span>
-                </div>
-                <div className="relative mt-1 h-2.5">
-                  <span className="absolute inset-y-0 left-0 rounded-[4px] bg-muted" style={{ width: `${(r.planned / max) * 100}%` }} aria-hidden />
-                  <span className="absolute inset-y-0 left-0 rounded-[4px] bg-series-1" style={{ width: `${(r.actual / max) * 100}%` }} aria-hidden />
-                </div>
-              </li>
-            ))}
-          </ul>
+          <div className="mt-3">
+            <StudyBars rows={rows} />
+          </div>
         </>
       ) : (
         <Empty>Noch nichts geplant oder gemessen – starte oben rechts den Fokus-Timer.</Empty>

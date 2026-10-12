@@ -303,6 +303,15 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (course_id, semester)
   );
   `,
+  `
+  -- Wochenrückblick (Sonntag): Schnappschuss pro Woche, Schlüssel = Montag
+  CREATE TABLE weekly_reviews (
+    week       TEXT PRIMARY KEY,
+    created_at INTEGER NOT NULL,
+    data       TEXT,
+    pushed_at  INTEGER
+  );
+  `,
 ];
 
 export type DB = DatabaseSync;

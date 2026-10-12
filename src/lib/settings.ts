@@ -15,6 +15,8 @@ export type Settings = {
   lastCalendar: string | null;
   /** Drive aufräumen: Ordnernamen, deren Dateien nie angefasst werden */
   driveProtected: string[];
+  /** Wochenrückblick sonntags als Push; die Seite /rueckblick gibt es immer */
+  weeklyReview: { enabled: boolean; time: string };
   /** Noten: aktuelles Halbjahr der Qualifikationsphase */
   gradeSemester: "Q1" | "Q2" | "Q3" | "Q4";
 };
@@ -40,6 +42,7 @@ export function defaultSettings(): Settings {
     lastCalendar: null,
     driveProtected: [],
     gradeSemester: "Q1",
+    weeklyReview: { enabled: true, time: "18:00" },
   };
 }
 
@@ -51,6 +54,7 @@ export function getSettings(db: DB): Settings {
       const v = JSON.parse(r.value);
       if (r.key === "goals") s.goals = { ...s.goals, ...v };
       else if (r.key === "briefing") s.briefing = { ...s.briefing, ...v };
+      else if (r.key === "weeklyReview") s.weeklyReview = { ...s.weeklyReview, ...v };
       else if (r.key === "dashboard") s.dashboard = normalizeLayout(v);
       else if (r.key in s) (s as Record<string, unknown>)[r.key] = v;
     } catch {

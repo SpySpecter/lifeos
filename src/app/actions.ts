@@ -22,6 +22,7 @@ import { decideDriveItem, markDriveItem, startDriveCleanup, undoDriveItem } from
 import { CATEGORIES } from "@/lib/mail/policy";
 import { getSettings, setSetting } from "@/lib/settings";
 import { getOrCreateBriefing } from "@/lib/briefing";
+import { getOrCreateReview } from "@/lib/weekly-review";
 import { BudgetExceededError } from "@/lib/openai";
 import { addCards, createDeck, deleteCard, deleteDeck, renameDeck, reviewCard, updateCard } from "@/lib/flashcards";
 import type { CardState, Rating } from "@/lib/fsrs";
@@ -280,6 +281,26 @@ const briefingSchema = z.object({
   time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Uhrzeit im Format HH:MM"),
   weekends: z.boolean(),
 });
+
+const weeklyReviewSchema = z.object({
+  enabled: z.boolean(),
+  time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Uhrzeit im Format HH:MM"),
+});
+
+export async function saveWeeklyReviewSettingsAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const parsed = weeklyReviewSchema.safeParse({ enabled: formData.get("enabled") === "on", time: String(formData.get("time") ?? "") });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
+  setSetting(db(), "weeklyReview", parsed.data);
+  revalidatePath("/settings");
+  return { ok: true, message: parsed.data.enabled ? `Gespeichert – kommt sonntags um ${parsed.data.time}` : "Gespeichert – Push aus" };
+}
+
+/** Rückblick einer Woche neu bauen (frische Zahlen, neuer KI-Kommentar). */
+export async function refreshReviewAction(week: string) {
+  const tz = env().APP_TZ;
+  await getOrCreateReview(db(), day.parse(week), today(tz), tz, { force: true });
+  revalidatePath("/rueckblick");
+}
 
 export async function saveBriefingSettingsAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const parsed = briefingSchema.safeParse({

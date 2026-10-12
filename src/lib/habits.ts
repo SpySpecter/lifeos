@@ -142,6 +142,26 @@ export function listHabits(db: DB, day: string, historyDays = 7): Habit[] {
   });
 }
 
+/** Für Rückblicke: an wie vielen der `days` war der Zeitraum jeder aktiven Gewohnheit erledigt, plus Serie am letzten Tag. */
+export function habitCoverage(db: DB, days: string[]): (Rhythm & { id: number; name: string; emoji: string; covered: number; streak: number; streakUnit: string })[] {
+  const last = days[days.length - 1];
+  const habits = db.prepare(`${HABIT_SELECT} WHERE archived = 0 ORDER BY position, id`).all() as HabitRow[];
+  const byHabit = checksByHabit(db, addDays(days[0], -400), last);
+  return habits.map((h) => {
+    const checks = byHabit.get(h.id) ?? [];
+    const rhythm = { cadence: h.cadence, intervalDays: h.intervalDays };
+    return {
+      id: h.id,
+      name: h.name,
+      emoji: h.emoji,
+      ...rhythm,
+      covered: coveredDays(rhythm, checks, days).size,
+      streak: habitStatus(rhythm, checks, last).streak,
+      streakUnit: UNITS[h.cadence],
+    };
+  });
+}
+
 /** Serie aufeinanderfolgender Tage. Ist heute noch offen, zählt die Serie bis gestern (sie ist noch nicht gerissen). */
 export function streak(done: Set<string>, day: string): number {
   let cursor = done.has(day) ? day : addDays(day, -1);
