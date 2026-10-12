@@ -5,6 +5,7 @@ import { connection } from "next/server";
 import { Suspense } from "react";
 import { BriefingRefresh } from "@/components/briefing-refresh";
 import { PageHeader } from "@/components/page-header";
+import { StudySessionList } from "@/components/study";
 import { WeatherIcon } from "@/components/weather-icon";
 import { WidgetCard, WidgetSkeleton } from "@/components/widget-card";
 import { dayHeading, LessonRow } from "@/components/widgets/school-widget";
@@ -14,6 +15,7 @@ import { briefingTime, getOrCreateBriefing, type Briefing } from "@/lib/briefing
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { listHabits } from "@/lib/habits";
+import { todaysSessions } from "@/lib/study";
 import { formatDayLong, formatTime } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { describeWeather } from "@/lib/weather-codes";
@@ -153,6 +155,18 @@ function HabitsCard({ day }: { day: string }) {
   );
 }
 
+/** Live aus den Lernplänen – nicht Teil des gespeicherten Briefings, damit Abhaken sofort sichtbar ist. */
+function StudyCard({ day }: { day: string }) {
+  const sessions = todaysSessions(db(), day);
+  if (!sessions.length) return null;
+  const open = sessions.filter((s) => !s.done).reduce((n, s) => n + s.minutes, 0);
+  return (
+    <WidgetCard title="Lernen heute" href="/lernen" hrefLabel="Pläne" footer={open ? `${open} Min. offen` : "Alles geschafft. 🎉"}>
+      <StudySessionList sessions={sessions} showPlan />
+    </WidgetCard>
+  );
+}
+
 function NewsCard({ news }: { news: NonNullable<Briefing["news"]> }) {
   return (
     <WidgetCard
@@ -213,6 +227,7 @@ async function BriefingContent() {
           {b.lessons ? <SchoolCard b={b} /> : null}
           {b.exams?.length ? <ExamsCard exams={b.exams} day={b.day} /> : null}
           {b.events ? <EventsCard events={b.events} tz={tz} /> : null}
+          <StudyCard day={b.day} />
           <HabitsCard day={b.day} />
         </div>
         {b.news ? <NewsCard news={b.news} /> : null}

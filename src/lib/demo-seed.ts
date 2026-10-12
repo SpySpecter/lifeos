@@ -1,6 +1,6 @@
 import type { DB } from "./db";
 import { upsertHealth } from "./health";
-import { lastDays, today } from "./time";
+import { addDays, lastDays, today } from "./time";
 
 /** Deterministischer Zufall, damit Screenshots reproduzierbar bleiben. */
 function rng(seed: number) {
@@ -8,6 +8,59 @@ function rng(seed: number) {
     seed = (seed * 1664525 + 1013904223) % 4294967296;
     return seed / 4294967296;
   };
+}
+
+const DEMO_MATERIAL = `# Sortieralgorithmen
+Sortierverfahren ordnen die Elemente einer Liste nach einem Schlüssel.
+
+## Bubblesort
+Benachbarte Elemente werden verglichen und getauscht, bis keine Vertauschung mehr nötig ist. Laufzeit O(n²).
+
+## Selectionsort
+Das kleinste Element des unsortierten Rests wird gesucht und nach vorne getauscht. Laufzeit immer O(n²).
+
+## Quicksort
+Ein Pivot-Element teilt die Liste in kleinere und größere Elemente, die rekursiv sortiert werden. Im Mittel O(n log n), im schlechtesten Fall O(n²).
+
+## Mergesort
+Die Liste wird halbiert, beide Hälften rekursiv sortiert und anschließend zusammengeführt. Laufzeit O(n log n), stabil.
+
+## Stabilität
+Ein Verfahren ist stabil, wenn gleiche Schlüssel ihre ursprüngliche Reihenfolge behalten.`;
+
+const DEMO_CARDS = `# Sortieralgorithmen
+Laufzeit von Bubblesort im schlechtesten Fall? == O(n²)
+Wie teilt Quicksort die Liste auf? == Über ein Pivot-Element in kleinere und größere Elemente
+Was bedeutet „stabil“ bei Sortierverfahren? == Gleiche Schlüssel behalten ihre ursprüngliche Reihenfolge
+Welches Verfahren ist immer O(n log n) und stabil? == Mergesort`;
+
+/** Lernplan für die Demo: Informatik-Klausur in 9 Tagen, vorgestern erledigt, gestern liegengeblieben. */
+function seedStudy(db: DB, day: string): void {
+  db.exec("DELETE FROM flashcard_sets; DELETE FROM study_sessions; DELETE FROM study_plans; DELETE FROM study_materials;");
+  const now = Date.now();
+  const material = Number(
+    db
+      .prepare("INSERT INTO study_materials (title, subject, content, created_at) VALUES (?, ?, ?, ?)")
+      .run("Sortieralgorithmen", "Informatik", DEMO_MATERIAL, now).lastInsertRowid,
+  );
+  const plan = Number(
+    db
+      .prepare("INSERT INTO study_plans (title, subject, exam_day, minutes_per_day, material_ids, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+      .run("Informatik", "LK", addDays(day, 9), 45, JSON.stringify([material]), now).lastInsertRowid,
+  );
+  const topics: [string, string[]][] = [
+    ["Überblick: Sortierverfahren", ["Zusammenfassung lesen", "Begriffe Stabilität und Laufzeit klären"]],
+    ["Bubblesort und Selectionsort", ["Beide von Hand an einer Liste mit 6 Zahlen durchspielen"]],
+    ["Quicksort", ["Pivot-Wahl verstehen", "Rekursion an einem Beispiel aufschreiben"]],
+    ["Mergesort", ["Teilen und Zusammenführen skizzieren", "Laufzeit begründen"]],
+    ["Wiederholung: Laufzeiten vergleichen", ["Tabelle best/average/worst case ausfüllen", "Karteikarten durchgehen"]],
+    ["Übungsaufgaben", ["Zwei alte Klausuraufgaben lösen"]],
+    ["Stabilität und Vergleich", ["Beispiele für stabile und instabile Verfahren finden"]],
+    ["Generalprobe", ["Probeklausur unter Zeitdruck", "Fehler nacharbeiten"]],
+  ];
+  const insert = db.prepare("INSERT INTO study_sessions (plan_id, day, topic, tasks, minutes, done) VALUES (?, ?, ?, ?, ?, ?)");
+  topics.forEach(([topic, tasks], i) => insert.run(plan, addDays(day, i - 2), topic, JSON.stringify(tasks), i === 7 ? 60 : 45, i === 0 ? 1 : 0));
+  db.prepare("INSERT INTO flashcard_sets (material_id, title, content, created_at) VALUES (?, ?, ?, ?)").run(material, "Sortieralgorithmen", DEMO_CARDS, now);
 }
 
 const DEMO_HABITS = [
@@ -40,6 +93,8 @@ export function seedDemoData(db: DB, day: string = today()): void {
         if (rand() < h.rate) insert.run(id, d);
       }
     });
+
+    seedStudy(db, day);
 
     for (const d of days.slice(-60)) {
       if (d === day) {

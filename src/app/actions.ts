@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 import { invalidate } from "@/lib/cache";
 import { db } from "@/lib/db";
@@ -17,6 +18,22 @@ import { clearInbox, decideMail, runTriage, undoMail, upsertRule } from "@/lib/m
 import { CATEGORIES } from "@/lib/mail/policy";
 import { getSettings, setSetting } from "@/lib/settings";
 import { getOrCreateBriefing } from "@/lib/briefing";
+import { BudgetExceededError } from "@/lib/openai";
+import {
+  addMaterial,
+  deleteFlashcardSet,
+  deleteMaterial,
+  deletePlan,
+  generateFlashcards,
+  generateStudyPlan,
+  MAX_FILE_BYTES,
+  prepareMaterial,
+  saveFlashcardSet,
+  savePlan,
+  setPlanArchived,
+  StudyError,
+  toggleSession,
+} from "@/lib/study";
 
 const id = z.number().int().positive();
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -296,4 +313,125 @@ export async function sendTestPushAction(): Promise<FormState> {
 export async function saveDashboardAction(layout: unknown) {
   setSetting(db(), "dashboard", normalizeLayout(layout));
   revalidatePath("/", "layout");
+}
+
+// ─── Lernen ────────────────────────────────────────────────────────────
+
+const MATERIAL_EXT = /\.(md|markdown|txt)$/i;
+
+/** Fehler der KI-Aufrufe in eine verständliche Meldung übersetzen. */
+function studyFailure(err: unknown): FormState {
+  if (err instanceof StudyError || err instanceof BudgetExceededError) return { ok: false, message: err.message };
+  console.error("[lernen]", err);
+  return { ok: false, message: "Die KI ist gerade nicht erreichbar – bitte später noch einmal versuchen." };
+}
+
+export async function uploadMaterialsAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const files = formData.getAll("files").filter((f): f is File => f instanceof File && f.size > 0);
+  const subject = z.string().trim().max(60).safeParse(formData.get("subject") ?? "");
+  if (!files.length) return { ok: false, message: "Bitte mindestens eine .md-Datei auswählen" };
+  if (!subject.success) return { ok: false, message: "Fach: maximal 60 Zeichen" };
+  const added: string[] = [];
+  const skipped: string[] = [];
+  for (const f of files.slice(0, 20)) {
+    if (!MATERIAL_EXT.test(f.name)) skipped.push(`${f.name} (kein Markdown)`);
+    else if (f.size > MAX_FILE_BYTES) skipped.push(`${f.name} (über 2 MB)`);
+    else {
+      const content = prepareMaterial(await f.text());
+      if (!content) skipped.push(`${f.name} (leer)`);
+      else {
+        // Titel aus der ersten Hauptüberschrift, sonst aus dem Dateinamen
+        const heading = /^# +(.+)$/m.exec(content)?.[1].replace(/[*_`]/g, "").trim();
+        const title = (heading || f.name.replace(MATERIAL_EXT, "").replace(/[_-]+/g, " ").trim()).slice(0, 120) || "Material";
+        addMaterial(db(), { title, subject: subject.data || null, content });
+        added.push(title);
+      }
+    }
+  }
+  revalidatePath("/lernen");
+  const note = skipped.length ? ` · übersprungen: ${skipped.join(", ")}` : "";
+  if (!added.length) return { ok: false, message: `Nichts hochgeladen${note}` };
+  return { ok: true, message: `${added.length === 1 ? `„${added[0]}“` : `${added.length} Dateien`} hochgeladen${note}` };
+}
+
+export async function deleteMaterialAction(materialId: number) {
+  deleteMaterial(db(), id.parse(materialId));
+  revalidatePath("/lernen");
+}
+
+const planSchema = z.object({
+  title: z.string().trim().min(1, "Wofür lernst du? Titel fehlt").max(80, "Titel: maximal 80 Zeichen"),
+  subject: z.string().trim().max(60),
+  examDay: day,
+  minutesPerDay: z.coerce.number().int().min(15, "Mindestens 15 Minuten pro Tag").max(240, "Höchstens 240 Minuten pro Tag"),
+  freeWeekdays: z.array(z.coerce.number().int().min(0).max(6)).max(6, "Mindestens ein Lerntag pro Woche"),
+  materialIds: z.array(z.coerce.number().int().positive()).max(30),
+});
+
+export async function createStudyPlanAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const parsed = planSchema.safeParse({
+    title: formData.get("title") ?? "",
+    subject: formData.get("subject") ?? "",
+    examDay: formData.get("examDay") ?? "",
+    minutesPerDay: formData.get("minutesPerDay") ?? "",
+    freeWeekdays: formData.getAll("freeWeekdays"),
+    materialIds: formData.getAll("materialIds"),
+  });
+  if (!parsed.success) {
+    const issue = parsed.error.issues[0];
+    return { ok: false, message: issue.path[0] === "examDay" ? "Bitte ein Klausurdatum wählen" : issue.message };
+  }
+  const p = parsed.data;
+  const now = today(env().APP_TZ);
+  if (p.examDay <= now) return { ok: false, message: "Die Klausur muss in der Zukunft liegen" };
+  const req = { ...p, subject: p.subject || null };
+  let planId: number;
+  try {
+    const sessions = await generateStudyPlan(db(), req, now);
+    planId = savePlan(db(), req, sessions);
+  } catch (err) {
+    return studyFailure(err);
+  }
+  revalidatePath("/lernen", "layout");
+  revalidatePath("/briefing");
+  redirect(`/lernen/plan?id=${planId}`);
+}
+
+export async function toggleStudySessionAction(sessionId: number) {
+  toggleSession(db(), id.parse(sessionId));
+  revalidatePath("/lernen", "layout");
+  revalidatePath("/briefing");
+}
+
+export async function archivePlanAction(planId: number, archived: boolean) {
+  setPlanArchived(db(), id.parse(planId), z.boolean().parse(archived));
+  revalidatePath("/lernen", "layout");
+  revalidatePath("/briefing");
+}
+
+export async function deletePlanAction(planId: number) {
+  deletePlan(db(), id.parse(planId));
+  revalidatePath("/lernen", "layout");
+  revalidatePath("/briefing");
+  redirect("/lernen");
+}
+
+export async function generateFlashcardsAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const materialId = id.safeParse(Number(formData.get("materialId")));
+  const count = z.coerce.number().int().min(5).max(100).safeParse(formData.get("count"));
+  if (!materialId.success) return { ok: false, message: "Ungültiges Material" };
+  if (!count.success) return { ok: false, message: "5 bis 100 Karten" };
+  try {
+    const set = await generateFlashcards(db(), materialId.data, count.data);
+    saveFlashcardSet(db(), { materialId: materialId.data, ...set });
+  } catch (err) {
+    return studyFailure(err);
+  }
+  revalidatePath("/lernen");
+  return { ok: true, message: "Karteikarten erstellt – unten bei „Karteikarten“" };
+}
+
+export async function deleteFlashcardSetAction(setId: number) {
+  deleteFlashcardSet(db(), id.parse(setId));
+  revalidatePath("/lernen");
 }

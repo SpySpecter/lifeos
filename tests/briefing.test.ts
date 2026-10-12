@@ -200,6 +200,7 @@ describe("Briefing zusammenstellen", () => {
       url: "/briefing",
       tag: "briefing",
     });
+    expect(briefingPushMessage(b, 45).body).toContain("2 Termine · 45 Min. Lernen · 2 Nachrichten");
   });
 });
 
