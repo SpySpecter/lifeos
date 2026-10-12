@@ -42,7 +42,7 @@ export function HabitFields({ initial, autoFocus = false }: { initial?: HabitDra
           aria-controls={`${ids}-picker`}
           aria-label={`Emoji wählen, aktuell ${emoji}`}
           className={cn(
-            "grid size-8 place-items-center rounded-lg border border-input text-lg leading-none hover:bg-muted dark:bg-input/30",
+            "grid size-11 place-items-center rounded-[10px] bg-muted text-title3 leading-none active:opacity-70",
             open && "border-ring ring-3 ring-ring/50",
           )}
         >
@@ -66,21 +66,21 @@ export function HabitFields({ initial, autoFocus = false }: { initial?: HabitDra
         <Label htmlFor={`${ids}-time`}>Erinnerung</Label>
         <div className="flex items-center gap-1">
           <div className="relative">
-            <BellRing className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground" aria-hidden />
+            <BellRing className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden />
             <Input
               id={`${ids}-time`}
               type="time"
               name="remindAt"
               value={remindAt}
               onChange={(e) => setRemindAt(e.target.value)}
-              className="w-[7.5rem] pl-7 tabular-nums"
+              className="w-[8.5rem] pl-8 tabular-nums"
             />
           </div>
           {remindAt ? (
             <button
               type="button"
               onClick={() => setRemindAt("")}
-              className="grid size-8 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+              className="grid size-11 place-items-center rounded-full text-muted-foreground active:bg-muted"
               aria-label="Erinnerung entfernen"
               title="Keine Erinnerung"
             >
@@ -93,10 +93,10 @@ export function HabitFields({ initial, autoFocus = false }: { initial?: HabitDra
       {open ? (
         <div
           id={`${ids}-picker`}
-          className="w-full min-w-0 basis-full rounded-xl bg-muted/50 p-2 ring-1 ring-foreground/8"
+          className="w-full min-w-0 basis-full rounded-[14px] bg-muted p-2"
           onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
         >
-          <div role="tablist" aria-label="Emoji-Kategorien" className="-mx-2 mb-2 flex min-w-0 gap-1 overflow-x-auto px-2 [scrollbar-width:none]">
+          <div role="tablist" aria-label="Emoji-Kategorien" className="no-scrollbar -mx-2 mb-2 flex min-w-0 gap-1 overflow-x-auto px-2">
             {EMOJI_GROUPS.map((g, i) => (
               <button
                 key={g.name}
@@ -105,8 +105,8 @@ export function HabitFields({ initial, autoFocus = false }: { initial?: HabitDra
                 aria-selected={group === i}
                 onClick={() => setGroup(i)}
                 className={cn(
-                  "rounded-full px-2.5 py-1 text-xs whitespace-nowrap text-muted-foreground hover:text-foreground",
-                  group === i && "bg-background text-foreground shadow-sm ring-1 ring-foreground/10",
+                  "min-h-9 rounded-full px-3 text-footnote font-medium whitespace-nowrap",
+                  group === i && "bg-card shadow-sm",
                 )}
               >
                 {g.name}
@@ -123,8 +123,8 @@ export function HabitFields({ initial, autoFocus = false }: { initial?: HabitDra
                 title={o.label}
                 aria-pressed={emoji === o.emoji}
                 className={cn(
-                  "grid h-10 place-items-center rounded-lg text-xl leading-none hover:bg-background",
-                  emoji === o.emoji && "bg-background ring-1 ring-foreground/20",
+                  "grid h-11 place-items-center rounded-[10px] text-title2 leading-none active:bg-card",
+                  emoji === o.emoji && "bg-card ring-2 ring-tint",
                 )}
               >
                 {o.emoji}
@@ -132,7 +132,7 @@ export function HabitFields({ initial, autoFocus = false }: { initial?: HabitDra
             ))}
           </div>
           <div className="mt-2 flex items-center gap-2 border-t border-foreground/8 pt-2">
-            <Label htmlFor={`${ids}-custom`} className="text-xs font-normal text-muted-foreground">
+            <Label htmlFor={`${ids}-custom`} className="text-footnote font-normal text-muted-foreground">
               Eigenes Emoji
             </Label>
             <Input
@@ -145,14 +145,14 @@ export function HabitFields({ initial, autoFocus = false }: { initial?: HabitDra
               placeholder="😀"
               maxLength={16}
               inputMode="text"
-              className="h-8 w-16 text-center text-lg"
+              className="w-16 bg-card text-center text-title3"
               aria-describedby={`${ids}-custom-hint`}
             />
-            <span id={`${ids}-custom-hint`} className="text-xs text-muted-foreground">
+            <span id={`${ids}-custom-hint`} className="text-footnote text-muted-foreground">
               über die Emoji-Tastatur
             </span>
             {picked ? (
-              <button type="button" onClick={() => { setPicked(null); setOpen(false); }} className="ml-auto text-xs text-muted-foreground underline-offset-2 hover:underline">
+              <button type="button" onClick={() => { setPicked(null); setOpen(false); }} className="ml-auto min-h-11 px-1 text-footnote text-tint-text">
                 Automatisch
               </button>
             ) : null}

@@ -7,8 +7,8 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "Persönliches Life-Dashboard",
     start_url: "/",
     display: "standalone",
-    background_color: "#111110",
-    theme_color: "#111110",
+    background_color: "#f2f2f7",
+    theme_color: "#f2f2f7",
     lang: "de",
     icons: [
       { src: "/icon.svg", sizes: "any", type: "image/svg+xml" },

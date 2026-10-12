@@ -96,7 +96,7 @@ export function PushSettings({ publicKey, devices }: { publicKey: string; device
     });
 
   return (
-    <div className="space-y-3 text-sm">
+    <div className="space-y-3 text-subhead">
       {status === "loading" ? <p className="text-muted-foreground">Prüfe dieses Gerät …</p> : null}
 
       {status === "install" ? (

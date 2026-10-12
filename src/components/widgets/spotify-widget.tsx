@@ -18,21 +18,21 @@ function Cover({ src, alt, size = "size-12" }: { src: string | null; alt: string
 export async function SpotifyWidget({ className }: { className?: string }) {
   const result = await loadSpotify();
   return (
-    <WidgetCard title="Musik" icon={Music} className={className}>
+    <WidgetCard title="Musik" className={className}>
       <ResultView result={result} integration="spotify">
         {(s) => (
           <div className="space-y-4">
             {s.nowPlaying ? (
-              <a {...link(s.nowPlaying.url)} className="flex items-center gap-3 rounded-xl bg-muted/50 p-3">
+              <a {...link(s.nowPlaying.url)} className="flex items-center gap-3 rounded-[14px] bg-muted p-3">
                 <Cover src={s.nowPlaying.image} alt={s.nowPlaying.album} size="size-14" />
                 <div className="min-w-0 flex-1">
-                  <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <p className="flex items-center gap-1 text-footnote text-muted-foreground">
                     {s.nowPlaying.isPlaying ? <Play className="size-3" aria-hidden /> : <Pause className="size-3" aria-hidden />}
                     {s.nowPlaying.isPlaying ? "Läuft gerade" : "Pausiert"}
                   </p>
-                  <p className="truncate font-medium">{s.nowPlaying.name}</p>
-                  <p className="truncate text-sm text-muted-foreground">{s.nowPlaying.artists}</p>
-                  <div className="mt-1.5 flex items-center gap-2 text-[10px] text-muted-foreground tabular-nums">
+                  <p className="truncate font-semibold">{s.nowPlaying.name}</p>
+                  <p className="truncate text-subhead text-muted-foreground">{s.nowPlaying.artists}</p>
+                  <div className="mt-1.5 flex items-center gap-2 text-caption2 text-muted-foreground tabular-nums">
                     <span>{mmss(s.nowPlaying.progressMs)}</span>
                     <div className="h-1 flex-1 rounded-full bg-muted">
                       <div
@@ -45,25 +45,25 @@ export async function SpotifyWidget({ className }: { className?: string }) {
                 </div>
               </a>
             ) : (
-              <p className="text-sm text-muted-foreground">Gerade läuft nichts.</p>
+              <p className="text-subhead text-muted-foreground">Gerade läuft nichts.</p>
             )}
-            <ul className="space-y-2 text-sm">
+            <ul className="space-y-2 text-subhead">
               {s.recent.slice(0, 4).map((t) => (
                 <li key={t.playedAt}>
-                  <a {...link(t.url)} className="flex items-center gap-3 hover:underline">
+                  <a {...link(t.url)} className="flex items-center gap-3 active:opacity-70">
                     <Cover src={t.image} alt={t.album} size="size-8" />
                     <span className="min-w-0 flex-1 truncate">
                       {t.name} <span className="text-muted-foreground">· {t.artists}</span>
                     </span>
-                    <span className="shrink-0 text-xs text-muted-foreground">{relativeTime(t.playedAt)}</span>
+                    <span className="shrink-0 text-footnote text-muted-foreground">{relativeTime(t.playedAt)}</span>
                   </a>
                 </li>
               ))}
             </ul>
             {s.topArtists.length ? (
-              <div className="border-t pt-3">
-                <h3 className="mb-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">Top-Artists (4 Wochen)</h3>
-                <ol className="flex flex-wrap gap-1.5 text-xs">
+              <div className="border-t border-border pt-3">
+                <h3 className="mb-1.5 text-footnote font-semibold text-muted-foreground">Top-Artists (4 Wochen)</h3>
+                <ol className="flex flex-wrap gap-1.5 text-footnote">
                   {s.topArtists.map((a, i) => (
                     <li key={a.name}>
                       <a {...link(a.url)} className="inline-flex rounded-full bg-muted px-2.5 py-1 hover:bg-muted/70">

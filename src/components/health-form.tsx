@@ -36,7 +36,7 @@ export function HealthForm({ today }: { today: string }) {
           {pending ? "Speichert …" : "Speichern"}
         </Button>
         {state ? (
-          <p role="status" className={state.ok ? "text-sm text-muted-foreground" : "text-sm text-critical"}>
+          <p role="status" className={state.ok ? "text-subhead text-muted-foreground" : "text-subhead text-critical"}>
             {state.message}
           </p>
         ) : null}

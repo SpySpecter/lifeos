@@ -32,8 +32,24 @@ Runs 24/7 on a 5 € VPS and is reachable **only inside my Tailscale network**.
 | 🎵 **Music** | Spotify Web API | Now playing, recently played, top artists (PKCE, dev-mode-compatible endpoints only) |
 | 📰 **News** | RSS / Atom | Tagesschau, politics, regional (rbb24), blue-light reports, heise, The Verge, Hacker News – thumbnails (feed media or the article's `og:image`), category tabs, local stories pinned |
 
-Plus: a read-only **Untis MCP server** at `/api/mcp` (timetable, changes, exams, homework) so Claude can answer school questions from inside the tailnet, dark/light theme, installable PWA for the iPhone home screen, per-widget streaming & error isolation, stale-while-error caching.
+Plus: a read-only **Untis MCP server** at `/api/mcp` (timetable, changes, exams, homework) so Claude can answer school questions from inside the tailnet, per-widget streaming & error isolation, stale-while-error caching.
 
+### Designed like an iPhone app
+
+LifeOS lives on my iPhone home screen, so the UI follows Apple's Human Interface Guidelines instead of a web-dashboard template:
+
+- **System font & Dynamic Type** – SF Pro on Apple devices; text scales with the iPhone's text-size setting while spacing stays put (`font: -apple-system-body`, spacing in px).
+- **Apple system colors** with their *increased-contrast* variants for small text; every text token is checked against WCAG (≥ 4.5:1) in [`tests/contrast.test.ts`](tests/contrast.test.ts). Light/dark follows the system only.
+- **Navigation:** floating glass tab bar (Heute · Schule · Habits · Gesundheit), large titles that collapse into a glass bar on scroll, settings behind a gear.
+- **Signature – day tiles:** one big number (next lesson, days until the exam, cancellations, temperature) with context underneath; the same shape counts down every exam.
+- **Today first, customizable:** what matters today is shown large, everything else as compact tiles that expand in place; reorder and switch widgets between *large / tile / off* like home-screen widgets.
+- **Touch:** swipe right to check off a habit or keep a mail, swipe left for archive/delete, taptic feedback on iOS 18+, 44 pt targets, Reduce Motion / Increase Contrast / Reduce Transparency respected.
+
+<p>
+  <img src="docs/screenshots/mobile-light.png" alt="Today screen on iPhone" width="32%">
+  <img src="docs/screenshots/mobile-school.png" alt="School tab on iPhone" width="32%">
+  <img src="docs/screenshots/mobile.png" alt="Today screen on iPhone, dark" width="32%">
+</p>
 <p>
   <img src="docs/screenshots/health.png" alt="Health charts" width="49%">
   <img src="docs/screenshots/habits.png" alt="Habit tracker" width="49%">

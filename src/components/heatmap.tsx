@@ -49,7 +49,7 @@ export function Heatmap({
           </div>
         ))}
       </div>
-      <figcaption className="mt-2 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
+      <figcaption className="mt-2 flex items-center justify-end gap-1 text-caption2 text-muted-foreground">
         weniger
         {[0, 1, 2, 3, 4].map((l) => (
           <span key={l} className="size-2.5 rounded-[3px]" style={{ background: `var(--seq-${l})` }} />

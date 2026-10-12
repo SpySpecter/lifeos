@@ -1,4 +1,4 @@
-import { CloudSun, Droplets, Sunrise, Sunset, Wind } from "lucide-react";
+import { Droplets, Sunrise, Sunset, Wind } from "lucide-react";
 import { loadWeather } from "@/integrations/loaders";
 import { describeWeather } from "@/lib/weather-codes";
 import { weekdayShort } from "@/lib/time";
@@ -13,7 +13,6 @@ export async function WeatherWidget({ className }: { className?: string }) {
   return (
     <WidgetCard
       title={result.status === "ok" && result.data.place ? `Wetter · ${result.data.place}` : "Wetter"}
-      icon={CloudSun}
       className={className}
       action={<LocateButton located={located} />}
     >
@@ -25,12 +24,12 @@ export async function WeatherWidget({ className }: { className?: string }) {
               <div className="flex items-center gap-4">
                 <WeatherIcon icon={now.icon} className="size-12 text-series-1" />
                 <div>
-                  <p className="text-4xl font-semibold tracking-tight tabular-nums">{deg(w.current.temp)}</p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="font-heading text-[2.75rem] leading-none font-bold tracking-tight tabular-nums">{deg(w.current.temp)}</p>
+                  <p className="text-subhead text-muted-foreground">
                     {now.label} · gefühlt {deg(w.current.feelsLike)}
                   </p>
                 </div>
-                <dl className="ml-auto shrink-0 space-y-1 text-right text-xs whitespace-nowrap text-muted-foreground">
+                <dl className="ml-auto shrink-0 space-y-1 text-right text-footnote whitespace-nowrap text-muted-foreground">
                   <div className="flex items-center justify-end gap-1">
                     <Wind className="size-3.5" aria-hidden />
                     <dt className="sr-only">Wind</dt>
@@ -51,11 +50,11 @@ export async function WeatherWidget({ className }: { className?: string }) {
 
               <ol className="no-scrollbar -mx-1 flex gap-1 overflow-x-auto" aria-label="Nächste Stunden">
                 {w.hourly.map((h) => (
-                  <li key={h.time} className="flex min-w-11 flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-xs">
+                  <li key={h.time} className="flex min-w-11 flex-col items-center gap-1 rounded-lg px-1 py-1.5 text-footnote">
                     <span className="text-muted-foreground">{h.time.slice(11, 13)}</span>
                     <WeatherIcon icon={describeWeather(h.code).icon} className="size-4" />
                     <span className="font-medium tabular-nums">{deg(h.temp)}</span>
-                    <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground tabular-nums">
+                    <span className="flex items-center gap-0.5 text-caption2 text-muted-foreground tabular-nums">
                       {h.precipProb >= 20 ? (
                         <>
                           <Droplets className="size-2.5" aria-hidden />
@@ -69,7 +68,7 @@ export async function WeatherWidget({ className }: { className?: string }) {
                 ))}
               </ol>
 
-              <ul className="grid grid-cols-5 gap-1 border-t pt-3 text-center text-xs">
+              <ul className="grid grid-cols-5 gap-1 border-t border-border pt-3 text-center text-footnote">
                 {w.daily.map((d, i) => (
                   <li key={d.day} className="flex flex-col items-center gap-1">
                     <span className="text-muted-foreground">{i === 0 ? "Heute" : weekdayShort(d.day)}</span>

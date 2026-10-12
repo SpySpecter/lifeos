@@ -3,7 +3,9 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { HealthChart } from "@/components/health-chart";
 import { HealthForm } from "@/components/health-form";
-import { WidgetSkeleton } from "@/components/widget-card";
+import { SettingsLink } from "@/components/nav";
+import { PageHeader } from "@/components/page-header";
+import { WidgetCard, WidgetSkeleton } from "@/components/widget-card";
 import { currentDay, loadHealth, loadSettings } from "@/integrations/loaders";
 import { METRICS, METRIC_KEYS, average, type Metric } from "@/lib/health";
 import { cn } from "@/lib/utils";
@@ -23,20 +25,22 @@ async function Charts({ searchParams }: { searchParams: Promise<{ range?: string
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-1 text-sm" role="group" aria-label="Zeitraum">
+      {/* Segmentierte Auswahl wie in Health (Links, damit der Zeitraum in der URL steht) */}
+      <nav className="grid max-w-sm grid-cols-3 rounded-[9px] bg-muted p-[2px]" aria-label="Zeitraum">
         {RANGES.map((r) => (
           <Link
             key={r}
             href={`/health?range=${r}`}
+            aria-current={r === range ? "page" : undefined}
             className={cn(
-              "rounded-lg px-3 py-1.5 text-muted-foreground hover:bg-muted",
-              r === range && "bg-card text-foreground ring-1 ring-foreground/8",
+              "flex min-h-8 items-center justify-center rounded-[7px] text-footnote font-medium text-foreground/80",
+              r === range && "bg-card text-foreground shadow-[0_3px_8px_rgb(0_0_0/0.12),0_3px_1px_rgb(0_0_0/0.04)] dark:bg-elevated",
             )}
           >
             {r} Tage
           </Link>
         ))}
-      </div>
+      </nav>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {METRIC_KEYS.map((k) => {
@@ -48,17 +52,20 @@ async function Charts({ searchParams }: { searchParams: Promise<{ range?: string
             value: series[k][i],
           }));
           return (
-            <section key={k} className="rounded-2xl bg-card p-4 ring-1 ring-foreground/8 sm:p-5">
-              <header className="mb-2 flex items-baseline gap-2">
-                <h2 className="font-medium">{m.label}</h2>
-                <p className="ml-auto text-sm text-muted-foreground tabular-nums">
-                  Ø {avg === null ? "–" : avg.toLocaleString("de-DE", { maximumFractionDigits: m.digits === 0 ? 0 : 1 })}
-                  {m.unit.startsWith("/") ? m.unit : ` ${m.unit}`}
+            <section key={k} className="rounded-[20px] bg-card p-4">
+              <header className="mb-3">
+                <h2 className="flex items-center gap-1.5 text-subhead font-semibold" style={{ color: "var(--cat-health)" }}>
+                  {m.label}
+                </h2>
+                <p className="mt-1 text-footnote text-muted-foreground">Durchschnitt · {range} Tage</p>
+                <p className="font-heading text-title1 font-bold tracking-tight tabular-nums">
+                  {avg === null ? "–" : avg.toLocaleString("de-DE", { maximumFractionDigits: m.digits === 0 ? 0 : 1 })}
+                  <span className="ml-1 text-subhead font-semibold text-muted-foreground">{m.unit.replace(/^\//, "von ")}</span>
                 </p>
               </header>
               <HealthChart data={data} kind={KIND[k]} unit={m.unit} digits={m.digits} goal={goalFor(k)} domain={k === "mood" ? [1, 5] : undefined} />
-              <details className="mt-2 text-xs text-muted-foreground">
-                <summary className="cursor-pointer select-none">Als Tabelle</summary>
+              <details className="mt-2 text-footnote text-muted-foreground">
+                <summary className="flex min-h-11 cursor-pointer items-center text-tint-text select-none">Als Tabelle</summary>
                 <table className="mt-2 w-full tabular-nums">
                   <tbody>
                     {data
@@ -66,7 +73,7 @@ async function Charts({ searchParams }: { searchParams: Promise<{ range?: string
                       .reverse()
                       .slice(0, 14)
                       .map((p) => (
-                        <tr key={p.day} className="border-t">
+                        <tr key={p.day} className="border-t border-border">
                           <td className="py-1">{p.day}</td>
                           <td className="py-1 text-right text-foreground">{p.value?.toLocaleString("de-DE")} {m.unit}</td>
                         </tr>
@@ -79,21 +86,17 @@ async function Charts({ searchParams }: { searchParams: Promise<{ range?: string
         })}
       </div>
 
-      <section className="rounded-2xl bg-card p-4 ring-1 ring-foreground/8 sm:p-5">
-        <h2 className="mb-1 font-medium">Werte eintragen</h2>
-        <p className="mb-4 text-sm text-muted-foreground">
-          Leere Felder bleiben unverändert. Automatisch geht es mit dem iPhone-Kurzbefehl (siehe Einstellungen).
-        </p>
+      <WidgetCard title="Werte eintragen" footer="Leere Felder bleiben unverändert. Automatisch geht es mit dem iPhone-Kurzbefehl (siehe Einstellungen).">
         <HealthForm today={today} />
-      </section>
+      </WidgetCard>
     </div>
   );
 }
 
 export default function HealthPage(props: PageProps<"/health">) {
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Gesundheit</h1>
+    <div className="space-y-6">
+      <PageHeader title="Gesundheit" trailing={<SettingsLink className="sm:hidden" />} />
       <Suspense fallback={<WidgetSkeleton lines={8} />}>
         <Charts searchParams={props.searchParams as Promise<{ range?: string }>} />
       </Suspense>

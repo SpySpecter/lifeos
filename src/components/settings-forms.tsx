@@ -20,7 +20,7 @@ import { Label } from "./ui/label";
 function Status({ state }: { state: FormState }) {
   if (!state) return null;
   return (
-    <p role="status" className={cn("text-sm", state.ok ? "text-muted-foreground" : "text-critical")}>
+    <p role="status" className={cn("text-subhead", state.ok ? "text-muted-foreground" : "text-critical")}>
       {state.message}
     </p>
   );
@@ -49,7 +49,7 @@ export function ProfileForm({ settings }: { settings: Settings }) {
         <Field id="lon" label="Längengrad" defaultValue={p?.lon ?? ""} inputMode="decimal" placeholder="13.44" />
       </div>
       <fieldset className="space-y-2">
-        <legend className="text-sm font-medium">Tagesziele</legend>
+        <legend className="text-subhead font-medium">Tagesziele</legend>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           <Field id="steps" label="Schritte" defaultValue={settings.goals.steps} inputMode="numeric" />
           <Field id="sleep" label="Schlaf (h)" defaultValue={settings.goals.sleep} inputMode="decimal" />
@@ -78,7 +78,7 @@ export function MailProfileForm({ profile }: { profile: string }) {
         defaultValue={profile}
         rows={7}
         maxLength={4000}
-        className="w-full rounded-lg border bg-transparent px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="w-full rounded-lg border bg-transparent px-3 py-2 text-subhead outline-none focus-visible:ring-2 focus-visible:ring-ring"
       />
       <div className="flex items-center gap-3">
         <Button type="submit" size="sm" disabled={pending}>
@@ -115,7 +115,7 @@ export function ClearInboxForm() {
 
 export function RuleForm() {
   const [state, action, pending] = useActionState<FormState, FormData>(addMailRuleAction, null);
-  const select = "h-8 rounded-lg border bg-transparent px-2 text-sm";
+  const select = "h-8 rounded-lg border bg-transparent px-2 text-subhead";
   return (
     <form action={action} className="flex flex-wrap items-end gap-2">
       <div className="min-w-48 flex-1 space-y-1.5">
@@ -153,14 +153,14 @@ export function RuleList({
   rules: { id: number; pattern: string; action: keyof typeof ACTIONS; category: keyof typeof CATEGORY_LABEL | null; source: string }[];
 }) {
   const [pending, start] = useTransition();
-  if (!rules.length) return <p className="text-sm text-muted-foreground">Noch keine Regeln. Sie entstehen auch automatisch, wenn du im Mail-Assistenten entscheidest oder etwas rückgängig machst.</p>;
+  if (!rules.length) return <p className="text-subhead text-muted-foreground">Noch keine Regeln. Sie entstehen auch automatisch, wenn du im Mail-Assistenten entscheidest oder etwas rückgängig machst.</p>;
   return (
-    <ul className={cn("divide-y text-sm", pending && "opacity-60")}>
+    <ul className={cn("divide-y text-subhead", pending && "opacity-60")}>
       {rules.map((r) => (
         <li key={r.id} className="flex items-center gap-2 py-1.5">
-          <span className="min-w-0 flex-1 truncate font-mono text-xs">{r.pattern}</span>
-          <span className="shrink-0 text-xs">{ACTIONS[r.action]}</span>
-          <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
+          <span className="min-w-0 flex-1 truncate font-mono text-footnote">{r.pattern}</span>
+          <span className="shrink-0 text-footnote">{ACTIONS[r.action]}</span>
+          <span className="hidden shrink-0 text-footnote text-muted-foreground sm:inline">
             {r.category ? CATEGORY_LABEL[r.category] : ""} · {r.source}
           </span>
           <button

@@ -1,4 +1,4 @@
-import { GitPullRequest, GitCommitHorizontal, Lock } from "lucide-react";
+import { GitPullRequest, Lock } from "lucide-react";
 import { loadGitHub } from "@/integrations/loaders";
 import { relativeTime } from "@/lib/time";
 import { CiStatus } from "../ci-status";
@@ -10,20 +10,20 @@ const link = (url: string) => (url && url !== "#" ? { href: url, target: "_blank
 export async function GitHubWidget({ className }: { className?: string }) {
   const result = await loadGitHub();
   return (
-    <WidgetCard title="GitHub" icon={GitCommitHorizontal} className={className}>
+    <WidgetCard title="GitHub" className={className}>
       <ResultView result={result} integration="github">
         {(gh) => (
           <div className="space-y-4">
             <div className="flex items-baseline gap-2">
-              <span className="text-3xl font-semibold tabular-nums">{gh.totalContributions.toLocaleString("de-DE")}</span>
-              <span className="text-sm text-muted-foreground">Beiträge im letzten Jahr · @{gh.login}</span>
+              <span className="font-heading text-title1 font-bold tabular-nums">{gh.totalContributions.toLocaleString("de-DE")}</span>
+              <span className="text-subhead text-muted-foreground">Beiträge im letzten Jahr · @{gh.login}</span>
             </div>
             <Heatmap
               cells={gh.days.map((d) => ({ day: d.date, value: d.count }))}
               label="Beiträge der letzten 15 Wochen"
               unit={(v) => `${v} Beiträge`}
             />
-            <ul className="divide-y text-sm">
+            <ul className="ios-rows text-subhead">
               {gh.repos.slice(0, 4).map((r) => (
                 <li key={r.name} className="flex items-center gap-3 py-2">
                   <span
@@ -32,14 +32,14 @@ export async function GitHubWidget({ className }: { className?: string }) {
                     title={r.language?.name}
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="flex items-center gap-1 font-medium">
-                      <a {...link(r.url)} className="truncate hover:underline">
+                    <p className="flex items-center gap-1 font-semibold">
+                      <a {...link(r.url)} className="truncate active:opacity-70">
                         {r.name}
                       </a>
                       {r.isPrivate ? <Lock className="size-3 text-muted-foreground" aria-label="privat" /> : null}
                     </p>
                     {r.lastCommit ? (
-                      <p className="truncate text-xs text-muted-foreground">
+                      <p className="truncate text-footnote text-muted-foreground">
                         {r.lastCommit.message} · {relativeTime(r.lastCommit.date)}
                       </p>
                     ) : null}
@@ -49,13 +49,13 @@ export async function GitHubWidget({ className }: { className?: string }) {
               ))}
             </ul>
             {gh.pullRequests.length ? (
-              <div className="border-t pt-3">
-                <h3 className="mb-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">Offene Pull Requests</h3>
-                <ul className="space-y-1.5 text-sm">
+              <div className="border-t border-border pt-3">
+                <h3 className="mb-1.5 text-footnote font-semibold text-muted-foreground">Offene Pull Requests</h3>
+                <ul className="space-y-1.5 text-subhead">
                   {gh.pullRequests.map((p) => (
                     <li key={p.url + p.title} className="flex items-center gap-2">
                       <GitPullRequest className="size-4 shrink-0 text-good" aria-hidden />
-                      <a {...link(p.url)} className="min-w-0 flex-1 truncate hover:underline">
+                      <a {...link(p.url)} className="min-w-0 flex-1 truncate active:opacity-70">
                         {p.title}
                       </a>
                       <CiStatus state={p.ci} />

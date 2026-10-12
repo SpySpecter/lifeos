@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { CheckCircle2, CircleAlert, CircleDashed } from "lucide-react";
+import { CheckCircle2, ChevronRight, CircleAlert, CircleDashed } from "lucide-react";
+import Link from "next/link";
 import { connection } from "next/server";
 import type { ReactNode } from "react";
 import { Suspense } from "react";
@@ -9,6 +10,7 @@ import { GMAIL_MODIFY, googleAccounts, hasScope } from "@/integrations/google";
 import { db, plainRows } from "@/lib/db";
 import { monthSpendUsd } from "@/lib/openai";
 import { getSettings } from "@/lib/settings";
+import { PageHeader } from "@/components/page-header";
 import { WidgetSkeleton } from "@/components/widget-card";
 import { github } from "@/integrations/github";
 import { googleRedirectUri } from "@/integrations/google";
@@ -25,7 +27,7 @@ function StatusLabel({ state, children }: { state: State; children: ReactNode })
   const Icon = state === "ok" ? CheckCircle2 : state === "todo" ? CircleAlert : CircleDashed;
   const color = state === "ok" ? "text-good" : state === "todo" ? "text-warning" : "text-muted-foreground";
   return (
-    <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+    <span className="inline-flex items-center gap-1.5 text-footnote text-muted-foreground">
       <Icon className={`size-4 ${color}`} aria-hidden />
       {children}
     </span>
@@ -34,21 +36,21 @@ function StatusLabel({ state, children }: { state: State; children: ReactNode })
 
 function Row({ id, title, description, state, status, children }: { id: string; title: string; description: string; state: State; status: string; children?: ReactNode }) {
   return (
-    <section id={id} className="scroll-mt-20 rounded-2xl bg-card p-4 ring-1 ring-foreground/8 sm:p-5">
-      <div className="flex flex-wrap items-start gap-3">
+    <section id={id} className="scroll-mt-16 rounded-[20px] bg-card p-4 sm:scroll-mt-20">
+      <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
         <div className="min-w-0 flex-1">
-          <h2 className="font-medium">{title}</h2>
-          <p className="text-sm text-muted-foreground">{description}</p>
+          <h2 className="text-body font-semibold">{title}</h2>
+          <p className="text-footnote text-muted-foreground">{description}</p>
         </div>
-        <StatusLabel state={state}>{status}</StatusLabel>
+        {status ? <StatusLabel state={state}>{status}</StatusLabel> : null}
       </div>
-      {children ? <div className="mt-3 space-y-2 text-sm">{children}</div> : null}
+      {children ? <div className="mt-3 space-y-2 text-subhead">{children}</div> : null}
     </section>
   );
 }
 
 const Code = ({ children }: { children: ReactNode }) => (
-  <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs break-all">{children}</code>
+  <code className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-footnote break-all">{children}</code>
 );
 
 const MESSAGES: Record<string, string> = {
@@ -67,7 +69,7 @@ async function SettingsContent({ searchParams }: { searchParams: Promise<Record<
   const demo = isDemo();
   const e = env();
   const connectBtn = (provider: "google" | "spotify", label: string) => (
-    <a href={`/api/auth/${provider}/start`} className="inline-flex h-8 items-center rounded-lg bg-primary px-3 text-sm font-medium text-primary-foreground hover:opacity-90">
+    <a href={`/api/auth/${provider}/start`} className="inline-flex min-h-11 items-center rounded-full bg-primary px-4 text-body font-semibold text-primary-foreground active:opacity-70">
       {label}
     </a>
   );
@@ -96,13 +98,27 @@ async function SettingsContent({ searchParams }: { searchParams: Promise<Record<
 
   return (
     <div className="space-y-4">
+      <nav aria-label="Allgemein" className="ios-inset-rows rounded-[20px] bg-card">
+        {[
+          ["/settings/uebersicht", "Übersicht anpassen", "Widgets der Heute-Seite ordnen und ein-/ausblenden"],
+          ["/habits", "Erinnerungen", "Mitteilungen für Gewohnheiten"],
+        ].map(([href, label, hint]) => (
+          <Link key={href} href={href} className="flex min-h-14 items-center gap-3 px-4 py-2 active:bg-muted">
+            <span className="min-w-0 flex-1">
+              <span className="block text-body">{label}</span>
+              <span className="block text-footnote text-muted-foreground">{hint}</span>
+            </span>
+            <ChevronRight className="size-5 text-muted-foreground" aria-hidden />
+          </Link>
+        ))}
+      </nav>
       {params.connected ? (
-        <p role="status" className="rounded-xl bg-good/10 px-4 py-3 text-sm ring-1 ring-good/30">
+        <p role="status" className="rounded-[14px] bg-good/12 px-4 py-3 text-subhead">
           {params.connected === "google" ? "Google" : "Spotify"} ist verbunden.
         </p>
       ) : null}
       {params.error ? (
-        <p role="alert" className="rounded-xl bg-critical/10 px-4 py-3 text-sm ring-1 ring-critical/30">
+        <p role="alert" className="rounded-[14px] bg-critical/12 px-4 py-3 text-subhead">
           {MESSAGES[params.error] ?? "Unbekannter Fehler."}
         </p>
       ) : null}
@@ -122,14 +138,14 @@ async function SettingsContent({ searchParams }: { searchParams: Promise<Record<
           </p>
         ) : null}
         {accounts.length ? (
-          <ul className="divide-y rounded-lg ring-1 ring-foreground/10">
+          <ul className="ios-rows rounded-[14px] bg-muted px-3">
             {accounts.map((a) => (
-              <li key={a} className="flex flex-wrap items-center gap-2 px-3 py-2">
-                <span className="min-w-0 flex-1 truncate font-medium">{a}</span>
+              <li key={a} className="flex min-h-11 flex-wrap items-center gap-2 py-1.5">
+                <span className="min-w-0 flex-1 truncate font-semibold">{a}</span>
                 {hasScope(a, GMAIL_MODIFY) ? (
-                  <span className="text-xs text-muted-foreground">Mail-Sortierung aktiv</span>
+                  <span className="text-footnote text-muted-foreground">Mail-Sortierung aktiv</span>
                 ) : (
-                  <a href="/api/auth/google/start" className="text-xs font-medium text-serious underline underline-offset-4">
+                  <a href="/api/auth/google/start" className="text-footnote font-semibold text-serious">
                     Neu verbinden für Mail-Sortierung
                   </a>
                 )}
@@ -149,14 +165,14 @@ async function SettingsContent({ searchParams }: { searchParams: Promise<Record<
         status={demo ? "Demo" : e.OPENAI_API_KEY ? `KI aktiv · ${monthSpendUsd(db()).toFixed(2)} $ von ${e.OPENAI_MONTHLY_BUDGET_USD} $ diesen Monat` : "OPENAI_API_KEY fehlt"}
       >
         <MailProfileForm profile={settings.mailProfile} />
-        <div className="space-y-2 border-t pt-3">
-          <h3 className="font-medium">Absender-Regeln</h3>
+        <div className="space-y-2 border-t border-border pt-3">
+          <h3 className="font-semibold">Absender-Regeln</h3>
           <p className="text-muted-foreground">Regeln gelten vor der KI. Sicherheits-Mails und markierte Mails werden nie angefasst.</p>
           <RuleForm />
           <RuleList rules={rules} />
         </div>
-        <div className="space-y-2 border-t pt-3">
-          <h3 className="font-medium">Posteingang leeren</h3>
+        <div className="space-y-2 border-t border-border pt-3">
+          <h3 className="font-semibold">Posteingang leeren</h3>
           <ClearInboxForm />
         </div>
       </Row>
@@ -201,8 +217,8 @@ async function SettingsContent({ searchParams }: { searchParams: Promise<Record<
 
 export default function SettingsPage(props: PageProps<"/settings">) {
   return (
-    <div className="max-w-3xl space-y-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Einstellungen</h1>
+    <div className="mx-auto max-w-3xl space-y-4">
+      <PageHeader title="Einstellungen" back={{ href: "/", label: "Heute" }} />
       <Suspense fallback={<WidgetSkeleton lines={8} />}>
         <SettingsContent searchParams={props.searchParams as Promise<Record<string, string | undefined>>} />
       </Suspense>

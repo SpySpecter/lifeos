@@ -4,13 +4,14 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
-import { BottomNav, Nav } from "@/components/nav";
+import { BottomNav, Nav, SettingsLink } from "@/components/nav";
 import { PullToRefresh } from "@/components/pull-to-refresh";
-import { ThemeToggle, themeScript } from "@/components/theme-toggle";
+import { themeScript } from "@/components/theme";
 import { isDemo } from "@/lib/env";
 import "./globals.css";
 
-const sans = Geist({ variable: "--font-sans", subsets: ["latin"] });
+// Geist nur als Rückfall außerhalb von Apple-Geräten; auf iPhone/Mac greift SF Pro (siehe globals.css)
+const sans = Geist({ variable: "--font-geist", subsets: ["latin"] });
 const mono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
@@ -23,8 +24,8 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f4f4f1" },
-    { media: "(prefers-color-scheme: dark)", color: "#111110" },
+    { media: "(prefers-color-scheme: light)", color: "#f2f2f7" },
+    { media: "(prefers-color-scheme: dark)", color: "#000000" },
   ],
 };
 
@@ -49,22 +50,25 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="min-h-full">
-        <div className="mx-auto flex min-h-full max-w-7xl flex-col px-[max(1rem,env(safe-area-inset-left))] pb-[calc(5.5rem+env(safe-area-inset-bottom))] sm:px-6 sm:pb-10">
-          <header className="sticky top-0 z-10 -mx-4 flex items-center gap-3 bg-background/85 px-4 pt-[max(0.75rem,env(safe-area-inset-top))] pb-3 backdrop-blur sm:-mx-6 sm:px-6">
+        {/* Ab sm: klassische Leiste oben. Auf dem Handy übernehmen große Titel + Tab-Leiste unten. */}
+        <header className="sticky top-0 z-20 hidden border-b border-border bg-bar backdrop-blur-xl backdrop-saturate-150 sm:block">
+          <div className="mx-auto flex h-14 max-w-7xl items-center gap-4 px-6">
             <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
               <span className="grid size-7 place-items-center rounded-lg bg-foreground text-sm text-background">L</span>
-              <span className="hidden sm:inline">LifeOS</span>
+              <span className="hidden lg:inline">LifeOS</span>
             </Link>
             <Nav />
             <div className="ml-auto flex items-center gap-2">
               <Suspense>
                 <UserBadge />
               </Suspense>
-              <ThemeToggle />
+              <SettingsLink />
             </div>
-          </header>
+          </div>
+        </header>
+        <div className="mx-auto flex min-h-full max-w-7xl flex-col px-[max(16px,env(safe-area-inset-left))] pb-[calc(104px+env(safe-area-inset-bottom))] sm:px-6 sm:pb-12">
           <PullToRefresh />
-          <main className="flex-1 pt-4">{children}</main>
+          <main className="flex-1 pt-3 sm:pt-6">{children}</main>
         </div>
         <BottomNav />
       </body>

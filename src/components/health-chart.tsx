@@ -8,7 +8,7 @@ function ChartTooltip({ active, payload, unit, digits }: { active?: boolean; pay
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
   return (
-    <div className="rounded-lg bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-md ring-1 ring-foreground/10">
+    <div className="rounded-[12px] bg-popover px-2.5 py-1.5 text-footnote text-popover-foreground shadow-md ring-1 ring-foreground/10">
       <p className="text-muted-foreground">{new Date(`${p.day}T12:00:00Z`).toLocaleDateString("de-DE", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" })}</p>
       <p className="font-medium tabular-nums">
         {p.value === null ? "kein Wert" : `${p.value.toLocaleString("de-DE", { maximumFractionDigits: digits })} ${unit}`}

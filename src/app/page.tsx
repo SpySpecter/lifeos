@@ -1,5 +1,8 @@
-import type { ReactNode } from "react";
-import { Suspense } from "react";
+import { SlidersHorizontal } from "lucide-react";
+import Link from "next/link";
+import { Suspense, type ComponentType } from "react";
+import { ExpandableTile, TileSkeleton } from "@/components/ios/expandable-tile";
+import { WidgetSkeleton } from "@/components/widget-card";
 import { CalendarWidget } from "@/components/widgets/calendar-widget";
 import { ExamsWidget } from "@/components/widgets/exams-widget";
 import { GitHubWidget } from "@/components/widgets/github-widget";
@@ -10,64 +13,129 @@ import { MailAssistantWidget } from "@/components/widgets/mail-assistant-widget"
 import { NewsWidget } from "@/components/widgets/news-widget";
 import { SchoolWidget } from "@/components/widgets/school-widget";
 import { SpotifyWidget } from "@/components/widgets/spotify-widget";
+import { loadSummary, type Summary } from "@/components/widgets/summary-tiles";
 import { TodayHero, TodayHeroSkeleton } from "@/components/widgets/today-hero";
 import { WeatherWidget } from "@/components/widgets/weather-widget";
-import { WidgetSkeleton } from "@/components/widget-card";
+import { loadSettings } from "@/integrations/loaders";
+import { WIDGETS, type WidgetId } from "@/lib/dashboard";
 import { cn } from "@/lib/utils";
 
-/**
- * Reihenfolge im DOM = Reihenfolge auf dem Handy (das Wichtigste für unterwegs zuerst).
- * Ab xl ordnet `order` die Kacheln für drei Spalten neu.
- */
-function Slot({ id, desktop, lines = 5, className, children }: { id?: string; desktop: string; lines?: number; className?: string; children: ReactNode }) {
+const FULL: Record<WidgetId, ComponentType> = {
+  school: SchoolWidget,
+  exams: ExamsWidget,
+  habits: HabitsWidget,
+  weather: WeatherWidget,
+  calendar: CalendarWidget,
+  mail: MailAssistantWidget,
+  inbox: InboxWidget,
+  health: HealthWidget,
+  news: NewsWidget,
+  music: SpotifyWidget,
+  github: GitHubWidget,
+};
+
+/** Sprungziele für die Tage-Kacheln */
+const ANCHOR: Partial<Record<WidgetId, string>> = { school: "schule", exams: "klausuren", weather: "wetter", habits: "habits" };
+
+function SummaryFace({ s }: { s: Summary }) {
+  const Icon = s.icon;
   return (
-    <div id={id} className={cn("scroll-mt-20", desktop, className)}>
-      <Suspense fallback={<WidgetSkeleton lines={lines} />}>{children}</Suspense>
-    </div>
+    <>
+      <p className="flex items-center gap-1.5 pr-5 text-footnote font-semibold">
+        <Icon className="size-4 shrink-0" style={{ color: s.color }} aria-hidden />
+        <span className="truncate">{s.title}</span>
+      </p>
+      {s.headline ? (
+        <p className="mt-auto line-clamp-2 pt-2 text-subhead leading-snug font-semibold">{s.headline}</p>
+      ) : (
+        <p
+          className={cn(
+            "mt-auto pt-2 font-heading text-title2 leading-none font-bold tracking-tight tabular-nums",
+            s.tone === "critical" && "text-critical",
+            s.tone === "warning" && "text-warning",
+          )}
+        >
+          {s.value ?? "–"}
+          {s.unit ? <span className="ml-1 text-footnote font-semibold text-muted-foreground">{s.unit}</span> : null}
+        </p>
+      )}
+      <p className={cn("mt-1 line-clamp-2 text-footnote text-muted-foreground", s.captionTone === "critical" && "font-medium text-critical")}>{s.caption}</p>
+    </>
   );
 }
 
-export default function Dashboard() {
+async function CompactTile({ id }: { id: WidgetId }) {
+  const Full = FULL[id];
+  const summary = await loadSummary(id);
   return (
-    <div className="space-y-5 sm:space-y-6">
+    <ExpandableTile title={WIDGETS[id]} face={<SummaryFace s={summary} />}>
+      <Suspense fallback={<WidgetSkeleton />}>
+        <Full />
+      </Suspense>
+    </ExpandableTile>
+  );
+}
+
+async function Sections() {
+  const { dashboard } = await loadSettings();
+  const large = dashboard.filter((w) => w.mode === "large");
+  const compact = dashboard.filter((w) => w.mode === "compact");
+  return (
+    <>
+      {large.length ? (
+        <div className="gap-6 md:columns-2 xl:columns-3">
+          {large.map(({ id }) => {
+            const Full = FULL[id];
+            return (
+              <div key={id} id={ANCHOR[id]} className="mb-6 scroll-mt-4 break-inside-avoid sm:scroll-mt-20">
+                <Suspense fallback={<WidgetSkeleton lines={5} />}>
+                  <Full />
+                </Suspense>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {compact.length ? (
+        <section aria-labelledby="mehr" className="mb-6">
+          <h2 id="mehr" className="mb-2 flex min-h-11 items-center px-1 text-title3 font-bold tracking-tight">
+            Mehr
+          </h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+            {compact.map(({ id }) => (
+              <Suspense key={id} fallback={<TileSkeleton />}>
+                <CompactTile id={id} />
+              </Suspense>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      {!large.length && !compact.length ? (
+        <p className="py-10 text-center text-subhead text-muted-foreground">Alle Widgets sind ausgeblendet.</p>
+      ) : null}
+    </>
+  );
+}
+
+export default function Today() {
+  return (
+    <div className="space-y-6">
       <Suspense fallback={<TodayHeroSkeleton />}>
         <TodayHero />
       </Suspense>
-
-      <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-3">
-        <Slot id="schule" desktop="xl:order-1" lines={6}>
-          <SchoolWidget />
-        </Slot>
-        <Slot id="klausuren" desktop="xl:order-2" lines={4}>
-          <ExamsWidget />
-        </Slot>
-        <Slot desktop="xl:order-6">
-          <HabitsWidget />
-        </Slot>
-        <Slot id="wetter" desktop="xl:order-3">
-          <WeatherWidget />
-        </Slot>
-        <Slot desktop="xl:order-4">
-          <CalendarWidget />
-        </Slot>
-        <Slot desktop="xl:order-5" lines={6}>
-          <MailAssistantWidget />
-        </Slot>
-        <Slot desktop="xl:order-7">
-          <InboxWidget />
-        </Slot>
-        <Slot desktop="xl:order-8">
-          <HealthWidget />
-        </Slot>
-        <Slot desktop="xl:order-9" lines={6}>
-          <NewsWidget />
-        </Slot>
-        <Slot desktop="xl:order-10">
-          <SpotifyWidget />
-        </Slot>
-        <Slot desktop="xl:order-11" className="md:col-span-2 xl:col-span-1">
-          <GitHubWidget />
-        </Slot>
+      <Suspense fallback={<WidgetSkeleton lines={6} />}>
+        <Sections />
+      </Suspense>
+      <div className="flex justify-center">
+        <Link
+          href="/settings/uebersicht"
+          className="flex min-h-11 items-center gap-2 rounded-full bg-card px-4 text-body font-medium text-tint-text active:opacity-60"
+        >
+          <SlidersHorizontal className="size-[1.125rem]" aria-hidden />
+          Übersicht anpassen
+        </Link>
       </div>
     </div>
   );

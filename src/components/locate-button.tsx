@@ -47,9 +47,9 @@ export function LocateButton({ located }: { located: boolean }) {
       disabled={pending}
       title={error ?? "Aktuellen Standort verwenden"}
       aria-label="Aktuellen Standort verwenden"
-      className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
+      className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1 rounded-full px-2 text-subhead text-tint-text hover:bg-muted active:opacity-60"
     >
-      <LocateFixed className={pending ? "size-3.5 animate-pulse" : "size-3.5"} aria-hidden />
+      <LocateFixed className={pending ? "size-[1.125rem] animate-pulse" : "size-[1.125rem]"} aria-hidden />
       {!located ? <span>Standort</span> : null}
     </button>
   );

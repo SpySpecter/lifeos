@@ -5,6 +5,7 @@ import { z } from "zod";
 import { invalidate } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { env } from "@/lib/env";
+import { normalizeLayout } from "@/lib/dashboard";
 import { isSingleEmoji, suggestEmoji } from "@/lib/emoji";
 import { addHabit, archiveHabit, deleteHabit, restoreHabit, toggleHabit, updateHabit } from "@/lib/habits";
 import { deleteSubscription, saveSubscription, sendToAll } from "@/lib/push";
@@ -258,4 +259,10 @@ export async function sendTestPushAction(): Promise<FormState> {
   const r = await sendToAll(db(), { title: "🔔 LifeOS", body: "Mitteilungen funktionieren. So sehen deine Erinnerungen aus.", url: "/habits", tag: "test" });
   if (!r.sent) return { ok: false, message: r.errors[0] ? `Senden fehlgeschlagen: ${r.errors[0]}` : "Kein Gerät registriert" };
   return { ok: true, message: `An ${r.sent} ${r.sent === 1 ? "Gerät" : "Geräte"} gesendet` };
+}
+
+/** Aufbau der Heute-Seite speichern (Reihenfolge + groß/kompakt/aus). Unbekanntes wird verworfen. */
+export async function saveDashboardAction(layout: unknown) {
+  setSetting(db(), "dashboard", normalizeLayout(layout));
+  revalidatePath("/", "layout");
 }

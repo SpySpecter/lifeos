@@ -4,8 +4,11 @@ import { HabitActionButton } from "@/components/habit-actions";
 import { HabitForm, HabitManageRow } from "@/components/habit-form";
 import { HabitList } from "@/components/habit-list";
 import { Heatmap } from "@/components/heatmap";
+import { SettingsLink } from "@/components/nav";
+import { PageHeader } from "@/components/page-header";
 import { PushSettings } from "@/components/push-settings";
-import { WidgetSkeleton } from "@/components/widget-card";
+import { Progress } from "@/components/ui/progress";
+import { WidgetCard, WidgetSkeleton } from "@/components/widget-card";
 import { currentDay, loadHabits } from "@/integrations/loaders";
 import { db } from "@/lib/db";
 import { habitHeatmap, listArchivedHabits } from "@/lib/habits";
@@ -18,7 +21,7 @@ function PushSection() {
   try {
     publicKey = vapidKeys(db()).publicKey;
   } catch (err) {
-    return <p className="text-sm text-critical">Mitteilungen nicht verfügbar: {(err as Error).message}</p>;
+    return <p className="text-subhead text-critical">Mitteilungen nicht verfügbar: {(err as Error).message}</p>;
   }
   return <PushSettings publicKey={publicKey} devices={countSubscriptions(db())} />;
 }
@@ -27,60 +30,77 @@ async function HabitsContent() {
   const [habits, day] = await Promise.all([loadHabits(30), currentDay()]);
   const heat = habitHeatmap(db(), day, 16 * 7);
   const archived = listArchivedHabits(db());
+  const done = habits.filter((h) => h.doneToday).length;
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr]">
-      <div className="space-y-4">
-      <section className="rounded-2xl bg-card p-4 ring-1 ring-foreground/8 sm:p-5">
-        <h2 className="mb-3 font-medium">Heute</h2>
-        {habits.length ? <HabitList habits={habits.map((h) => ({ ...h, history: h.history.slice(-7) }))} /> : <p className="text-sm text-muted-foreground">Noch keine Gewohnheiten.</p>}
-        <div className="mt-5 border-t pt-4">
-          <HabitForm />
-        </div>
-      </section>
-      <section className="rounded-2xl bg-card p-4 ring-1 ring-foreground/8 sm:p-5">
-        <h2 className="mb-3 font-medium">Erinnerungen</h2>
-        <PushSection />
-      </section>
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start [&>*]:min-w-0">
+      <div className="space-y-6">
+        <WidgetCard title="Heute">
+          {habits.length ? (
+            <div className="-my-2">
+              <div className="flex items-center gap-3 pt-1 pb-3">
+                <Progress value={(done / habits.length) * 100} className="flex-1 [&_[data-slot=progress-indicator]]:bg-good" aria-label="Heute erledigt" />
+                <span className="text-subhead text-muted-foreground tabular-nums">
+                  {done === habits.length ? "Alles erledigt 🎉" : `${done} von ${habits.length}`}
+                </span>
+              </div>
+              <HabitList habits={habits.map((h) => ({ ...h, history: h.history.slice(-7) }))} />
+            </div>
+          ) : (
+            <p className="text-subhead text-muted-foreground">Noch keine Gewohnheiten – leg unten die erste an.</p>
+          )}
+          <div className="mt-3 border-t border-border pt-2">
+            <HabitForm />
+          </div>
+        </WidgetCard>
+
+        <WidgetCard title="Erinnerungen">
+          <PushSection />
+        </WidgetCard>
       </div>
 
-      <div className="space-y-4">
-        <section className="rounded-2xl bg-card p-4 ring-1 ring-foreground/8 sm:p-5">
-          <h2 className="mb-3 font-medium">Letzte 16 Wochen</h2>
+      <div className="space-y-6">
+        {habits.length ? (
+          <WidgetCard title="Verwalten" footer="Nach links wischen für Bearbeiten, Archivieren und Löschen. Balken: erledigt an den letzten 30 Tagen.">
+            <ul className="-my-2 ios-inset-rows [--inset:52px]">
+              {habits.map((h) => (
+                <HabitManageRow
+                  key={h.id}
+                  habit={{ id: h.id, name: h.name, emoji: h.emoji, remindAt: h.remindAt }}
+                  rate={h.history.filter((d) => d.done).length / h.history.length}
+                />
+              ))}
+            </ul>
+          </WidgetCard>
+        ) : null}
+
+        <WidgetCard title="Letzte 16 Wochen">
           <Heatmap
             cells={heat.map((h) => ({ day: h.day, value: h.count, max: h.total }))}
             label="Erledigte Gewohnheiten pro Tag, letzte 16 Wochen"
             unit={(v) => `${v} erledigt`}
-            cell="size-3 sm:size-4"
+            cell="size-3.5 sm:size-4"
           />
-        </section>
-        <section className="rounded-2xl bg-card p-4 ring-1 ring-foreground/8 sm:p-5">
-          <h2 className="mb-3 font-medium">Gewohnheiten · Quote 30 Tage</h2>
-          <ul className="space-y-3 text-sm">
-            {habits.map((h) => (
-              <HabitManageRow
-                key={h.id}
-                habit={{ id: h.id, name: h.name, emoji: h.emoji, remindAt: h.remindAt }}
-                rate={h.history.filter((d) => d.done).length / h.history.length}
-              />
-            ))}
-          </ul>
-          {archived.length ? (
-            <details className="mt-4 border-t pt-3 text-sm">
-              <summary className="cursor-pointer text-muted-foreground select-none">Archiviert ({archived.length})</summary>
-              <ul className="mt-2 space-y-1">
-                {archived.map((h) => (
-                  <li key={h.id} className="flex items-center gap-3">
-                    <span aria-hidden>{h.emoji}</span>
-                    <span className="flex-1 truncate">{h.name}</span>
-                    <span className="text-xs text-muted-foreground tabular-nums">{h.checks}× erledigt</span>
-                    <HabitActionButton kind="restore" id={h.id} name={h.name} />
-                    <HabitActionButton kind="delete" id={h.id} name={h.name} />
-                  </li>
-                ))}
-              </ul>
-            </details>
-          ) : null}
-        </section>
+        </WidgetCard>
+
+        {archived.length ? (
+          <WidgetCard title={`Archiv (${archived.length})`}>
+            <ul className="-my-2 ios-inset-rows [--inset:36px]">
+              {archived.map((h) => (
+                <li key={h.id} className="flex min-h-12 items-center gap-3">
+                  <span className="text-title3 leading-none" aria-hidden>
+                    {h.emoji}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-body">{h.name}</span>
+                    <span className="text-footnote text-muted-foreground tabular-nums">{h.checks}× erledigt</span>
+                  </span>
+                  <HabitActionButton kind="restore" id={h.id} name={h.name} />
+                  <HabitActionButton kind="delete" id={h.id} name={h.name} />
+                </li>
+              ))}
+            </ul>
+          </WidgetCard>
+        ) : null}
       </div>
     </div>
   );
@@ -88,8 +108,8 @@ async function HabitsContent() {
 
 export default function HabitsPage() {
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold tracking-tight">Gewohnheiten</h1>
+    <div className="space-y-6">
+      <PageHeader title="Gewohnheiten" trailing={<SettingsLink className="sm:hidden" />} />
       <Suspense fallback={<WidgetSkeleton lines={8} />}>
         <HabitsContent />
       </Suspense>

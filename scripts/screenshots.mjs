@@ -10,7 +10,9 @@ const shots = [
   { name: "dashboard-light", path: "/", theme: "light", viewport: { width: 1440, height: 1500 } },
   { name: "health", path: "/health", theme: "dark", viewport: { width: 1440, height: 1100 } },
   { name: "habits", path: "/habits", theme: "light", viewport: { width: 1440, height: 800 } },
-  { name: "mobile", path: "/", theme: "dark", viewport: { width: 390, height: 1400 }, mobile: true },
+  { name: "mobile", path: "/", theme: "dark", viewport: { width: 393, height: 1400 }, mobile: true },
+  { name: "mobile-light", path: "/", theme: "light", viewport: { width: 393, height: 1400 }, mobile: true },
+  { name: "mobile-school", path: "/schule", theme: "light", viewport: { width: 393, height: 1400 }, mobile: true },
 ];
 
 const browser = await chromium.launch();
@@ -23,10 +25,9 @@ for (const s of shots) {
     locale: "de-DE",
     timezoneId: "Europe/Berlin",
   });
-  await context.addInitScript((theme) => localStorage.setItem("lifeos-theme", theme), s.theme);
   const page = await context.newPage();
-  await page.goto(BASE + s.path, { waitUntil: "networkidle" });
-  await page.waitForTimeout(800); // Diagramme und gestreamte Widgets
+  await page.goto(BASE + s.path, { waitUntil: "load", timeout: 30000 });
+  await page.waitForTimeout(1500); // Diagramme und gestreamte Widgets
   await page.screenshot({ path: `${OUT}/${s.name}.png`, fullPage: !s.mobile });
   console.log("✓", s.name);
   await context.close();

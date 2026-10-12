@@ -1,4 +1,3 @@
-import { NotebookPen } from "lucide-react";
 import type { Exam } from "@/integrations/exams";
 import { daysUntil } from "@/integrations/exams";
 import { currentDay, loadExams } from "@/integrations/loaders";
@@ -18,33 +17,40 @@ const dateLabel = (x: Exam) =>
   (x.start ? ` · ${x.start}${x.end ? `–${x.end}` : ""}` : "") +
   (x.detail ? ` · ${x.detail}` : "");
 
-function ExamRow({ exam, days }: { exam: Exam; days: number }) {
+/** Tage-Kachel im Kleinen: dieselbe Form wie oben auf der Heute-Seite. */
+function Countdown({ days }: { days: number }) {
   const u = urgency(days);
+  return (
+    <div
+      className={cn(
+        "grid h-14 w-14 shrink-0 place-content-center rounded-[14px] text-center",
+        u === "critical" && "bg-critical/12 text-critical",
+        u === "warning" && "bg-warning/15 text-warning",
+        u === "calm" && "bg-muted",
+      )}
+    >
+      {days <= 1 ? (
+        <span className="text-subhead font-bold">{countdownLabel(days)}</span>
+      ) : (
+        <>
+          <span className="font-heading text-title2 leading-none font-bold tabular-nums">{days}</span>
+          <span className="text-caption2 font-medium text-muted-foreground">Tage</span>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ExamRow({ exam, days }: { exam: Exam; days: number }) {
   const body = (
-    <div className="flex items-center gap-3">
-      <div
-        className={cn(
-          "grid w-14 shrink-0 place-items-center rounded-lg py-1.5 text-center ring-1",
-          u === "critical" && "bg-critical/12 ring-critical/40",
-          u === "warning" && "bg-warning/12 ring-warning/40",
-          u === "calm" && "bg-muted ring-transparent",
-        )}
-      >
-        {days <= 1 ? (
-          <span className="text-xs font-semibold">{countdownLabel(days)}</span>
-        ) : (
-          <>
-            <span className="text-lg leading-none font-semibold tabular-nums">{days}</span>
-            <span className="text-[10px] text-muted-foreground">Tage</span>
-          </>
-        )}
-      </div>
-      <div className="min-w-0">
-        <p className="truncate text-sm font-medium">
-          {exam.label}
-          {exam.course ? <span className="ml-1.5 rounded bg-muted px-1 py-px text-[10px] font-medium text-muted-foreground">{exam.course}</span> : null}
+    <div className="flex items-center gap-3 py-2.5">
+      <Countdown days={days} />
+      <div className="min-w-0 flex-1">
+        <p className="flex items-center gap-1.5 text-body font-semibold">
+          <span className="truncate">{exam.label}</span>
+          {exam.course ? <span className="shrink-0 rounded-md bg-muted px-1.5 py-0.5 text-caption font-semibold text-muted-foreground">{exam.course}</span> : null}
         </p>
-        <p className="truncate text-xs text-muted-foreground">
+        <p className="truncate text-footnote text-muted-foreground">
           {exam.kind} · {dateLabel(exam)}
           {exam.topic ? ` · ${exam.topic}` : ""}
         </p>
@@ -54,7 +60,7 @@ function ExamRow({ exam, days }: { exam: Exam; days: number }) {
   return (
     <li>
       {exam.url ? (
-        <a href={exam.url} target="_blank" rel="noreferrer" className="block rounded-lg hover:bg-muted/60">
+        <a href={exam.url} target="_blank" rel="noreferrer" className="block active:opacity-60">
           {body}
         </a>
       ) : (
@@ -64,21 +70,28 @@ function ExamRow({ exam, days }: { exam: Exam; days: number }) {
   );
 }
 
-export async function ExamsWidget({ className }: { className?: string }) {
+export async function ExamsWidget({
+  className,
+  limit = 4,
+  href = "/schule#klausuren",
+}: {
+  className?: string;
+  limit?: number;
+  href?: string | null;
+}) {
   const [result, day] = await Promise.all([loadExams(), currentDay()]);
   return (
-    <WidgetCard title="Klausuren & Tests" icon={NotebookPen} className={className} action={<RefreshButton integration="exams" />}>
+    <WidgetCard title="Klausuren & Tests" className={className} href={href ?? undefined} action={<RefreshButton integration="exams" />}>
       <ResultView result={result} integration="exams">
         {(list) =>
           list.length ? (
-            <ul className="space-y-2.5">
-              {list.slice(0, 5).map((x) => (
+            <ul className="-my-2.5 ios-inset-rows [--inset:68px]">
+              {list.slice(0, limit).map((x) => (
                 <ExamRow key={x.id} exam={x} days={daysUntil(x.day, day)} />
               ))}
-              {list.length > 5 ? <li className="text-xs text-muted-foreground">+ {list.length - 5} weitere</li> : null}
             </ul>
           ) : (
-            <p className="py-6 text-sm text-muted-foreground">
+            <p className="py-2 text-subhead text-muted-foreground">
               Keine Klausuren oder Tests in den nächsten 6 Monaten. Termine mit „Klausur“ oder „Test“ im Titel erscheinen hier automatisch.
             </p>
           )

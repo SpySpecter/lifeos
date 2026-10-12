@@ -33,13 +33,13 @@ export function HabitActionButton({ kind, id, name }: { kind: keyof typeof KINDS
         if (!k.confirm || confirm(k.confirm(name))) start(() => k.run(id));
       }}
       className={cn(
-        "grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50",
-        kind === "delete" && "hover:text-critical",
+        "grid size-11 shrink-0 place-items-center rounded-full text-tint active:bg-muted disabled:opacity-50",
+        kind === "delete" && "text-critical",
       )}
       aria-label={`${name} ${k.title.toLowerCase()}`}
       title={k.title}
     >
-      <Icon className="size-4" aria-hidden />
+      <Icon className="size-[1.125rem]" aria-hidden />
     </button>
   );
 }

@@ -1,4 +1,5 @@
 import type { DB } from "./db";
+import { DEFAULT_LAYOUT, normalizeLayout, type DashboardLayout } from "./dashboard";
 import { METRICS } from "./health";
 
 /** Einstellungen, die im Dashboard änderbar sind (Schlüssel-Wert-Tabelle, Werte als JSON). */
@@ -7,6 +8,7 @@ export type Settings = {
   defaultPlace: { name: string; lat: number; lon: number } | null;
   goals: { steps: number; sleep: number; workout: number; energy: number };
   mailProfile: string;
+  dashboard: DashboardLayout;
 };
 
 export const DEFAULT_MAIL_PROFILE = `Ich bin Schüler in der Oberstufe (Brandenburg, LK Informatik) und programmiere viel (GitHub, KI-Tools, eigener VPS).
@@ -25,6 +27,7 @@ export function defaultSettings(): Settings {
       energy: METRICS.energy.goal,
     },
     mailProfile: DEFAULT_MAIL_PROFILE,
+    dashboard: DEFAULT_LAYOUT,
   };
 }
 
@@ -35,6 +38,7 @@ export function getSettings(db: DB): Settings {
     try {
       const v = JSON.parse(r.value);
       if (r.key === "goals") s.goals = { ...s.goals, ...v };
+      else if (r.key === "dashboard") s.dashboard = normalizeLayout(v);
       else if (r.key in s) (s as Record<string, unknown>)[r.key] = v;
     } catch {
       /* ungültigen Eintrag ignorieren */

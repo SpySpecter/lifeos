@@ -15,7 +15,7 @@ export function NewsList({ items, limit = 8 }: { items: NewsItem[]; limit?: numb
 
   return (
     <div className="space-y-3">
-      <div className="no-scrollbar -mx-1 flex gap-1 overflow-x-auto px-1" role="tablist" aria-label="Kategorie">
+      <div className="no-scrollbar -mx-4 flex gap-2 overflow-x-auto px-4" role="tablist" aria-label="Kategorie">
         {categories.map((c) => (
           <button
             key={c}
@@ -24,23 +24,23 @@ export function NewsList({ items, limit = 8 }: { items: NewsItem[]; limit?: numb
             aria-selected={tab === c}
             onClick={() => setTab(c)}
             className={cn(
-              "shrink-0 rounded-full px-3 py-1 text-xs text-muted-foreground hover:bg-muted",
-              tab === c && "bg-foreground text-background hover:bg-foreground",
+              "min-h-9 shrink-0 rounded-full bg-muted px-3.5 text-subhead font-medium active:opacity-70",
+              tab === c && "bg-foreground text-background",
             )}
           >
             {c}
           </button>
         ))}
       </div>
-      <ul className="divide-y text-sm">
+      <ul className="ios-rows">
         {shown.map((n) => (
-          <li key={n.link + n.title} className="py-2 first:pt-0 last:pb-0">
-            <a href={n.link} target="_blank" rel="noreferrer" className="group flex items-start gap-3">
+          <li key={n.link + n.title} className="py-3 last:pb-0">
+            <a href={n.link} target="_blank" rel="noreferrer" className="group flex items-start gap-3 active:opacity-70">
               <div className="min-w-0 flex-1">
-                <p className="leading-snug font-medium group-hover:underline">{n.title}</p>
-                <p className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+                <p className="line-clamp-3 text-body leading-snug font-semibold">{n.title}</p>
+                <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-footnote text-muted-foreground">
                   {n.local ? (
-                    <span className="inline-flex items-center gap-0.5 font-medium text-series-2">
+                    <span className="inline-flex items-center gap-0.5 font-semibold text-serious">
                       <MapPin className="size-3" aria-hidden /> In deiner Nähe ·
                     </span>
                   ) : null}
@@ -59,10 +59,10 @@ export function NewsList({ items, limit = 8 }: { items: NewsItem[]; limit?: numb
 
 function Thumb({ src, source }: { src?: string; source: string }) {
   const [failed, setFailed] = useState(false);
-  const box = "h-14 w-20 shrink-0 overflow-hidden rounded-md bg-muted sm:h-16 sm:w-24";
+  const box = "h-16 w-[5.5rem] shrink-0 overflow-hidden rounded-[10px] bg-muted sm:w-24";
   if (!src || failed) {
     return (
-      <div className={cn(box, "grid place-items-center text-lg font-semibold text-muted-foreground/60")} aria-hidden>
+      <div className={cn(box, "grid place-items-center text-title3 font-semibold text-muted-foreground")} aria-hidden>
         {source.charAt(0)}
       </div>
     );

@@ -7,9 +7,34 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
-  --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", var(--font-geist), system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", var(--font-geist-mono), monospace;
+  --font-heading: -apple-system, BlinkMacSystemFont, "SF Pro Display", var(--font-geist), system-ui, sans-serif;
+  /* Abstände in px: Bei großer Systemschrift wächst der Text, nicht das ganze Layout */
+  --spacing: 4px;
+  /* iOS-Textstile, relativ zu Body (17 pt auf dem iPhone) */
+  --text-caption2: 0.6875rem;
+  --text-caption2--line-height: 1.2;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1.33;
+  --text-footnote: 0.8125rem;
+  --text-footnote--line-height: 1.38;
+  --text-subhead: 0.9375rem;
+  --text-subhead--line-height: 1.33;
+  --text-body: 1.0625rem;
+  --text-body--line-height: 1.3;
+  --text-title3: 1.25rem;
+  --text-title3--line-height: 1.25;
+  --text-title2: 1.375rem;
+  --text-title2--line-height: 1.27;
+  --text-title1: 1.75rem;
+  --text-title1--line-height: 1.21;
+  --text-largetitle: 2.125rem;
+  --text-largetitle--line-height: 1.2;
+  --color-tint: var(--tint);
+  --color-tint-text: var(--tint-text);
+  --color-elevated: var(--elevated);
+  --color-bar: var(--bar);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -64,15 +89,11 @@
   --series-3: #1baf7a;
   --series-4: #eda100;
   --series-5: #e87ba4;
-  --seq-0: #ebebe7;
+  --seq-0: #e5e5ea;
   --seq-1: #b7d3f6;
   --seq-2: #86b6ef;
   --seq-3: #3987e5;
   --seq-4: #1c5cab;
-  --status-good: #0ca30c;
-  --status-warning: #fab219;
-  --status-serious: #ec835a;
-  --status-critical: #d03b3b;
 }
 .dark {
   --series-1: #3987e5;
@@ -80,80 +101,143 @@
   --series-3: #199e70;
   --series-4: #c98500;
   --series-5: #d55181;
-  --seq-0: #262624;
+  --seq-0: #2c2c2e;
   --seq-1: #104281;
   --seq-2: #1c5cab;
   --seq-3: #2a78d6;
   --seq-4: #6da7ec;
 }
 
+/*
+ * Farben nach Apples Systemfarben (iOS), für Web als CSS-Variablen.
+ * Kleine Texte nutzen die kontrastreichen Varianten (Increased Contrast), damit alles ≥ 4,5:1 erreicht.
+ * Flächen: gruppierter Hintergrund (#F2F2F7 / #000) mit Zellen (#FFF / #1C1C1E) wie in Einstellungen/Health.
+ */
 :root {
-  --background: #f4f4f1;
-  --foreground: #0b0b0b;
-  --card: #fcfcfb;
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: #6b6a66;
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --background: #f2f2f7; /* systemGroupedBackground */
+  --foreground: #000000; /* label */
+  --card: #ffffff; /* secondarySystemGroupedBackground */
+  --card-foreground: #000000;
+  --elevated: #ffffff;
+  --popover: #ffffff;
+  --popover-foreground: #000000;
+  --tint: #007aff; /* systemBlue – Symbole, Flächen, aktive Tabs */
+  --tint-text: #0062cc; /* Links/kleiner Text, 5,8:1 auf Weiß */
+  --primary: #0066d6; /* gefüllte Knöpfe, weiße Schrift 5,4:1 */
+  --primary-foreground: #ffffff;
+  --secondary: rgb(118 118 128 / 0.12); /* tertiarySystemFill */
+  --secondary-foreground: #000000;
+  --muted: rgb(118 118 128 / 0.12);
+  --muted-foreground: #6b6b70; /* secondaryLabel (Increased Contrast), 5,3:1 */
+  --accent: rgb(118 118 128 / 0.12);
+  --accent-foreground: #000000;
+  --destructive: #d70015;
+  --border: rgb(60 60 67 / 0.18); /* separator */
+  --input: rgb(60 60 67 / 0.29);
+  --ring: #007aff;
+  --radius: 10px;
+  --chart-1: #c7c7cc;
+  --chart-2: #8e8e93;
+  --chart-3: #636366;
+  --chart-4: #48484a;
+  --chart-5: #3a3a3c;
+  --sidebar: #f2f2f7;
+  --sidebar-foreground: #000000;
+  --sidebar-primary: #0066d6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgb(118 118 128 / 0.12);
+  --sidebar-accent-foreground: #000000;
+  --sidebar-border: rgb(60 60 67 / 0.18);
+  --sidebar-ring: #007aff;
+  /* Status (systemGreen/Yellow/Orange/Red, kontrastreiche Varianten) */
+  --status-good: #1e7b34;
+  --status-warning: #b25000;
+  --status-serious: #c93400;
+  --status-critical: #d70015;
+  --bar: rgb(255 255 255 / 0.72); /* schwebende Leisten (Glas) */
+  /* Kategorien (nur Symbole, immer mit Text): Schule, Klausuren, Habits, Wetter, Termine, Mail, Posteingang, Gesundheit, News, Musik, GitHub */
+  --cat-school: #5856d6;
+  --cat-exams: #c93400;
+  --cat-habits: #1e7b34;
+  --cat-weather: #0071a4;
+  --cat-calendar: #d70015;
+  --cat-mail: #8944ab;
+  --cat-inbox: #0062cc;
+  --cat-health: #d30f45;
+  --cat-news: #6b6b70;
+  --cat-music: #d30f45;
+  --cat-github: #3a3a3c;
 }
 
 .dark {
-  --background: #111110;
+  --background: #000000;
   --foreground: #ffffff;
-  --card: #1a1a19;
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: #a3a29a;
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --card: #1c1c1e;
+  --card-foreground: #ffffff;
+  --elevated: #2c2c2e;
+  --popover: #2c2c2e;
+  --popover-foreground: #ffffff;
+  --tint: #0a84ff;
+  --tint-text: #409cff;
+  --primary: #0066d6;
+  --primary-foreground: #ffffff;
+  --secondary: rgb(118 118 128 / 0.24);
+  --secondary-foreground: #ffffff;
+  --muted: rgb(118 118 128 / 0.24);
+  --muted-foreground: #98989f; /* secondaryLabel, 5,9:1 auf #1C1C1E */
+  --accent: rgb(118 118 128 / 0.24);
+  --accent-foreground: #ffffff;
+  --destructive: #ff6961;
+  --border: rgb(84 84 88 / 0.65);
+  --input: rgb(84 84 88 / 0.9);
+  --ring: #0a84ff;
+  --chart-1: #48484a;
+  --chart-2: #636366;
+  --chart-3: #8e8e93;
+  --chart-4: #aeaeb2;
+  --chart-5: #c7c7cc;
+  --sidebar: #000000;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #0066d6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgb(118 118 128 / 0.24);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgb(84 84 88 / 0.65);
+  --sidebar-ring: #0a84ff;
+  --status-good: #30d158;
+  --status-warning: #ffd60a;
+  --status-serious: #ff9f0a;
+  --status-critical: #ff6961;
+  --bar: rgb(30 30 32 / 0.72);
+  --cat-school: #5e5ce6;
+  --cat-exams: #ff9f0a;
+  --cat-habits: #30d158;
+  --cat-weather: #64d2ff;
+  --cat-calendar: #ff453a;
+  --cat-mail: #bf5af2;
+  --cat-inbox: #0a84ff;
+  --cat-health: #ff375f;
+  --cat-news: #98989f;
+  --cat-music: #ff375f;
+  --cat-github: #c7c7cc;
+}
+
+/* „Kontrast erhöhen“: Leisten deckend, Trennlinien kräftiger */
+@media (prefers-contrast: more) {
+  :root {
+    --border: rgb(60 60 67 / 0.45);
+    --muted-foreground: #48484d;
+    --bar: #ffffff;
+  }
+  .dark {
+    --border: rgb(120 120 128 / 0.9);
+    --muted-foreground: #c7c7cc;
+    --bar: #1c1c1e;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root { --bar: #ffffff; }
+  .dark { --bar: #1c1c1e; }
 }
 
 @layer base {
@@ -165,11 +249,63 @@
   }
   html {
     @apply font-sans;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+    text-rendering: optimizeLegibility;
+  }
+  /* Safari (iPhone/Mac): Grundgröße folgt der Systemeinstellung „Textgröße“ (Dynamic Type) */
+  @supports (font: -apple-system-body) {
+    html {
+      font: -apple-system-body;
+      font-family: var(--font-sans);
+    }
+  }
+  button,
+  a,
+  [role="button"] {
+    touch-action: manipulation;
+  }
+  :focus-visible {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 }
 @utility no-scrollbar {
   scrollbar-width: none;
   &::-webkit-scrollbar {
     display: none;
+  }
+}
+
+/* Zeilen einer gruppierten Liste: feine Trennlinie zwischen den Zeilen, nicht über die volle Breite */
+@utility ios-rows {
+  & > * + * {
+    border-top: 0.5px solid var(--border);
+  }
+}
+
+/* Trennlinie zwischen Zeilen erst ab dem Textanfang (`--inset`, Standard 16px) wie in iOS-Listen */
+@utility ios-inset-rows {
+  & > * + * {
+    position: relative;
+  }
+  & > * + *::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    left: var(--inset, 16px);
+    height: 0.5px;
+    background: var(--border);
+    z-index: 1;
   }
 }
