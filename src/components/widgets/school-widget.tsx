@@ -31,7 +31,7 @@ export function LessonRow({ lesson, now }: { lesson: SchoolLesson; now: string |
       <div className="min-w-0 flex-1">
         <p className={cn("flex items-center gap-1.5 text-body font-semibold", cancelled && "text-muted-foreground line-through")}>
           <span className="truncate">{title}</span>
-          {course.kind ? <span className="shrink-0 text-footnote font-medium text-muted-foreground">{course.kind}</span> : null}
+          {course.kind && course.kind !== title ? <span className="shrink-0 text-footnote font-medium text-muted-foreground">{course.kind}</span> : null}
         </p>
         <p className="truncate text-footnote text-muted-foreground">
           {[lesson.rooms.length ? `Raum ${lesson.rooms.join(", ")}` : null, lesson.teachers.join(", ")].filter(Boolean).join(" · ")}
