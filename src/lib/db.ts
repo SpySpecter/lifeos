@@ -209,6 +209,46 @@ const MIGRATIONS: string[] = [
     error       TEXT
   );
   `,
+  `
+  -- eigene Karteikarten mit FSRS statt RemNote-Text (alte Sets werden verworfen)
+  DROP TABLE flashcard_sets;
+  CREATE TABLE flashcard_decks (
+    id          INTEGER PRIMARY KEY,
+    title       TEXT NOT NULL,
+    subject     TEXT,
+    material_id INTEGER REFERENCES study_materials(id) ON DELETE SET NULL,
+    created_at  INTEGER NOT NULL
+  );
+  CREATE TABLE flashcards (
+    id             INTEGER PRIMARY KEY,
+    deck_id        INTEGER NOT NULL REFERENCES flashcard_decks(id) ON DELETE CASCADE,
+    section        TEXT,
+    front          TEXT NOT NULL,
+    back           TEXT NOT NULL,
+    -- FSRS-Zustand (ts-fsrs Card); due/last_review in ms
+    due            INTEGER NOT NULL,
+    stability      REAL NOT NULL DEFAULT 0,
+    difficulty     REAL NOT NULL DEFAULT 0,
+    elapsed_days   INTEGER NOT NULL DEFAULT 0,
+    scheduled_days INTEGER NOT NULL DEFAULT 0,
+    learning_steps INTEGER NOT NULL DEFAULT 0,
+    reps           INTEGER NOT NULL DEFAULT 0,
+    lapses         INTEGER NOT NULL DEFAULT 0,
+    state          INTEGER NOT NULL DEFAULT 0, -- 0 neu, 1 lernen, 2 wiederholen, 3 neu lernen
+    last_review    INTEGER,
+    created_at     INTEGER NOT NULL
+  );
+  CREATE INDEX flashcards_deck ON flashcards (deck_id, due);
+  CREATE INDEX flashcards_due ON flashcards (due);
+  CREATE TABLE flashcard_reviews (
+    id          INTEGER PRIMARY KEY,
+    card_id     INTEGER NOT NULL REFERENCES flashcards(id) ON DELETE CASCADE,
+    rating      INTEGER NOT NULL, -- 1 nochmal, 2 schwer, 3 gut, 4 einfach
+    state       INTEGER NOT NULL, -- Zustand vor der Wiederholung
+    reviewed_at INTEGER NOT NULL
+  );
+  CREATE INDEX flashcard_reviews_time ON flashcard_reviews (reviewed_at);
+  `,
 ];
 
 export type DB = DatabaseSync;

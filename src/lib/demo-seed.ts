@@ -1,4 +1,5 @@
 import type { DB } from "./db";
+import { addCards, createDeck, reviewCard } from "./flashcards";
 import { upsertHealth } from "./health";
 import { addDays, lastDays, today } from "./time";
 
@@ -28,15 +29,25 @@ Die Liste wird halbiert, beide Hälften rekursiv sortiert und anschließend zusa
 ## Stabilität
 Ein Verfahren ist stabil, wenn gleiche Schlüssel ihre ursprüngliche Reihenfolge behalten.`;
 
-const DEMO_CARDS = `# Sortieralgorithmen
-Laufzeit von Bubblesort im schlechtesten Fall? == O(n²)
-Wie teilt Quicksort die Liste auf? == Über ein Pivot-Element in kleinere und größere Elemente
-Was bedeutet „stabil“ bei Sortierverfahren? == Gleiche Schlüssel behalten ihre ursprüngliche Reihenfolge
-Welches Verfahren ist immer O(n log n) und stabil? == Mergesort`;
+const DEMO_CARDS = [
+  { front: "Laufzeit von Bubblesort im schlechtesten Fall?", back: "O(n²)" },
+  { front: "Wie teilt Quicksort die Liste auf?", back: "Über ein Pivot-Element in kleinere und größere Elemente" },
+  { front: "Was bedeutet „stabil“ bei Sortierverfahren?", back: "Gleiche Schlüssel behalten ihre ursprüngliche Reihenfolge" },
+  { front: "Welches Verfahren ist immer O(n log n) und stabil?", back: "Mergesort" },
+  { front: "Was macht Selectionsort in jedem Schritt?", back: "Das kleinste Element des unsortierten Rests suchen und nach vorne tauschen" },
+  { front: "Laufzeit von Quicksort im Mittel?", back: "O(n log n)" },
+];
+
+const DEMO_VOCAB = [
+  { front: "to deteriorate", back: "sich verschlechtern" },
+  { front: "ambiguous", back: "mehrdeutig" },
+  { front: "to undermine", back: "untergraben" },
+  { front: "inevitable", back: "unvermeidlich" },
+];
 
 /** Lernplan für die Demo: Informatik-Klausur in 9 Tagen, vorgestern erledigt, gestern liegengeblieben. */
 function seedStudy(db: DB, day: string): void {
-  db.exec("DELETE FROM flashcard_sets; DELETE FROM study_sessions; DELETE FROM study_plans; DELETE FROM study_materials;");
+  db.exec("DELETE FROM flashcard_decks; DELETE FROM study_sessions; DELETE FROM study_plans; DELETE FROM study_materials;");
   const now = Date.now();
   const material = Number(
     db
@@ -60,7 +71,13 @@ function seedStudy(db: DB, day: string): void {
   ];
   const insert = db.prepare("INSERT INTO study_sessions (plan_id, day, topic, tasks, minutes, done) VALUES (?, ?, ?, ?, ?, ?)");
   topics.forEach(([topic, tasks], i) => insert.run(plan, addDays(day, i - 2), topic, JSON.stringify(tasks), i === 7 ? 60 : 45, i === 0 ? 1 : 0));
-  db.prepare("INSERT INTO flashcard_sets (material_id, title, content, created_at) VALUES (?, ?, ?, ?)").run(material, "Sortieralgorithmen", DEMO_CARDS, now);
+  const deck = createDeck(db, { title: "Sortieralgorithmen", subject: "Informatik", materialId: material }, now);
+  addCards(db, deck, DEMO_CARDS, now);
+  // ein Teil schon gelernt: zwei fällig, zwei erst in ein paar Tagen
+  const ids = (db.prepare("SELECT id FROM flashcards WHERE deck_id = ? ORDER BY id").all(deck) as { id: number }[]).map((r) => r.id);
+  for (const [i, cardId] of ids.slice(0, 4).entries()) reviewCard(db, cardId, 4, now - (i < 2 ? 12 : 1) * 86_400_000);
+  const vocab = createDeck(db, { title: "Englisch Vokabeln", subject: "Englisch" }, now);
+  addCards(db, vocab, DEMO_VOCAB, now);
 }
 
 /** Drive aufräumen: ein abgeschlossener Lauf mit offenen Fragen und Dateien im Papierkorb. */

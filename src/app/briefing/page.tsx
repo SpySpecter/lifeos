@@ -13,6 +13,8 @@ import { daysUntil } from "@/integrations/exams";
 import { sortEvents } from "@/integrations/google";
 import { briefingTime, getOrCreateBriefing, type Briefing } from "@/lib/briefing";
 import { db } from "@/lib/db";
+import { cardWindow } from "@/integrations/loaders";
+import { dueCount } from "@/lib/flashcards";
 import { env } from "@/lib/env";
 import { listHabits } from "@/lib/habits";
 import { todaysSessions } from "@/lib/study";
@@ -156,13 +158,18 @@ function HabitsCard({ day }: { day: string }) {
 }
 
 /** Live aus den Lernplänen – nicht Teil des gespeicherten Briefings, damit Abhaken sofort sichtbar ist. */
-function StudyCard({ day }: { day: string }) {
+async function StudyCard({ day }: { day: string }) {
   const sessions = todaysSessions(db(), day);
-  if (!sessions.length) return null;
+  const { now, end } = await cardWindow();
+  const cards = dueCount(db(), now, end);
+  if (!sessions.length && !cards) return null;
   const open = sessions.filter((s) => !s.done).reduce((n, s) => n + s.minutes, 0);
+  const footer = [sessions.length ? (open ? `${open} Min. offen` : "Alles geschafft. 🎉") : null, cards ? `${cards} ${cards === 1 ? "Karte" : "Karten"} fällig` : null]
+    .filter(Boolean)
+    .join(" · ");
   return (
-    <WidgetCard title="Lernen heute" href="/lernen" hrefLabel="Pläne" footer={open ? `${open} Min. offen` : "Alles geschafft. 🎉"}>
-      <StudySessionList sessions={sessions} showPlan />
+    <WidgetCard title="Lernen heute" href={sessions.length ? "/lernen" : "/lernen/wiederholen"} hrefLabel={sessions.length ? "Pläne" : "Wiederholen"} footer={footer}>
+      {sessions.length ? <StudySessionList sessions={sessions} showPlan /> : <p className="py-1 text-subhead">Keine Lerneinheit geplant – Zeit für die Karteikarten.</p>}
     </WidgetCard>
   );
 }

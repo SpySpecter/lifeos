@@ -5,6 +5,7 @@ import {
   GraduationCap,
   Heart,
   Inbox,
+  Layers,
   ListChecks,
   MailCheck,
   Music,
@@ -14,6 +15,7 @@ import {
 } from "lucide-react";
 import {
   currentDay,
+  loadDecks,
   loadExams,
   loadGitHub,
   loadGoogle,
@@ -160,6 +162,19 @@ const SUMMARIES: Record<WidgetId, () => Promise<Summary>> = {
         captionTone: red ? "critical" : "normal",
       };
     });
+  },
+  async cards() {
+    const decks = await loadDecks();
+    const due = decks.reduce((s, d) => s + d.due, 0);
+    return {
+      icon: Layers,
+      color: "var(--cat-cards)",
+      title: "Karteikarten",
+      value: decks.length ? n(due) : "–",
+      unit: decks.length ? "fällig" : undefined,
+      caption: !decks.length ? "Noch keine Stapel" : due ? `in ${decks.filter((d) => d.due).length} von ${decks.length} Stapeln` : "Alles wiederholt 🎉",
+      tone: due >= 50 ? "warning" : "normal",
+    };
   },
 };
 

@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { env, isDemo } from "@/lib/env";
 import { mailAssistantData, type MailAssistantData } from "@/lib/mail/triage";
 import { getSettings } from "@/lib/settings";
+import { dayEnd, listDecks } from "@/lib/flashcards";
 import { listHabits } from "@/lib/habits";
 import { healthSeries } from "@/lib/health";
 import { lastDays, today } from "@/lib/time";
@@ -47,6 +48,18 @@ export const loadHabits = cache(async (historyDays: number = 7) => listHabits(db
 export const loadHealth = cache(async (days: number) => {
   const range = lastDays(await currentDay(), days);
   return { days: range, series: healthSeries(db(), range) };
+});
+
+/** Jetzt und Ende des Tages – „fällig“ heißt bei Karteikarten: bis heute Abend dran. */
+export const cardWindow = cache(async () => {
+  await connection();
+  const now = Date.now();
+  return { now, end: dayEnd(now, env().APP_TZ) };
+});
+
+export const loadDecks = cache(async () => {
+  const { now, end } = await cardWindow();
+  return listDecks(db(), now, end);
 });
 
 export const loadSettings = cache(async () => {

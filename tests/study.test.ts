@@ -1,33 +1,28 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   addMaterial,
-  countCards,
   deleteMaterial,
   deletePlan,
   generateFlashcards,
   generateStudyPlan,
   getPlan,
-  listFlashcardSets,
   listMaterials,
   listPlans,
   materialContext,
   openStudyMinutes,
   outline,
   prepareMaterial,
-  remNoteText,
-  saveFlashcardSet,
   savePlan,
   studyDays,
   todaysSessions,
   toggleSession,
-  toRemNote,
   validateSessions,
 } from "@/lib/study";
 import { seedDemoData } from "@/lib/demo-seed";
+import { listDecks } from "@/lib/flashcards";
 import { memoryDb } from "./support/db";
 
 const DAY = "2026-10-12"; // Montag
-const ZWSP = "\u200B";
 
 beforeAll(() => {
   process.env.OPENAI_API_KEY = "sk-test";
@@ -90,28 +85,6 @@ describe("Material vorbereiten", () => {
       { heading: "Kapitel", text: "Einleitung." },
       { heading: "Teil 2", text: "Punkt eins" },
     ]);
-  });
-});
-
-describe("RemNote", () => {
-  it("eine Zeile pro Karte, Überschrift pro Abschnitt", () => {
-    const out = toRemNote([
-      { heading: "## Ableitungen", cards: [{ front: "Was ist f'(x)?", back: "Die Steigung\nder Tangente" }, { front: " ", back: "leer" }] },
-      { heading: "Leer", cards: [] },
-      { heading: "", cards: [{ front: "Produktregel", back: "(uv)' = u'v + uv'" }] },
-    ]);
-    expect(out).toBe("# Ableitungen\nWas ist f'(x)? == Die Steigung · der Tangente\n\nProduktregel == (uv)' = u'v + uv'");
-    expect(countCards(out)).toBe(2);
-  });
-
-  it("entschärft RemNote-Trenner innerhalb einer Karte", () => {
-    expect(remNoteText("x == y")).toBe(`x =${ZWSP}= y`);
-    expect(remNoteText("a === b")).toBe(`a =${ZWSP}=${ZWSP}= b`);
-    expect(remNoteText("cin >> x; std::cout << y <> z;;")).toBe(
-      `cin >${ZWSP}> x; std:${ZWSP}:cout <${ZWSP}< y <${ZWSP}> z;${ZWSP};`,
-    );
-    const line = toRemNote([{ heading: "", cards: [{ front: "Vergleich in Java?", back: "a == b" }] }]);
-    expect(line.split(" == ")).toHaveLength(2);
   });
 });
 
@@ -197,26 +170,25 @@ describe("Lernplan", () => {
 });
 
 describe("Karteikarten", () => {
-  it("erstellt Karten mit der KI und speichert sie als RemNote-Text", async () => {
+  it("erstellt Karten mit der KI und hängt den Abschnitt an", async () => {
     const db = memoryDb();
     const m = addMaterial(db, { title: "Weimar", subject: "Geschichte", content: "# Krisenjahr 1923\nInflation." });
     vi.stubGlobal(
       "fetch",
-      aiAnswer({ sections: [{ heading: "Krisenjahr 1923", cards: [{ front: "Wann war die Hyperinflation?", back: "1923" }] }] }),
+      aiAnswer({ sections: [{ heading: "## Krisenjahr 1923", cards: [{ front: "Wann war die Hyperinflation?", back: "1923" }, { front: " ", back: "leer" }] }] }),
     );
-    const set = await generateFlashcards(db, m, 20);
-    expect(set).toEqual({ title: "Weimar", content: "# Krisenjahr 1923\nWann war die Hyperinflation? == 1923" });
-    saveFlashcardSet(db, { materialId: m, ...set });
-    expect(listFlashcardSets(db)[0]).toMatchObject({ title: "Weimar", cards: 1, materialId: m });
+    expect(await generateFlashcards(db, m, 20)).toEqual({
+      title: "Weimar",
+      subject: "Geschichte",
+      cards: [{ front: "Wann war die Hyperinflation?", back: "1923", section: "Krisenjahr 1923" }],
+    });
     expect(listMaterials(db)[0]).toMatchObject({ title: "Weimar", chars: 28 });
-    // Material löschen lässt die Karten stehen
     deleteMaterial(db, m);
-    expect(listFlashcardSets(db)[0]).toMatchObject({ materialId: null, cards: 1 });
   });
 });
 
 describe("Demo-Daten", () => {
-  it("legen Material, Plan mit Liegengebliebenem und RemNote-Karten an – auch beim Neu-Seeden nur einmal", () => {
+  it("legen Material, Plan mit Liegengebliebenem und Karteikarten an – auch beim Neu-Seeden nur einmal", () => {
     const db = memoryDb();
     seedDemoData(db, DAY);
     db.exec("DELETE FROM health"); // erzwingt erneutes Seeden
@@ -227,8 +199,13 @@ describe("Demo-Daten", () => {
       ["Quicksort", false],
     ]);
     expect(openStudyMinutes(db, DAY)).toBe(90);
-    const [set] = listFlashcardSets(db);
-    expect(set.cards).toBe(4);
-    expect(set.content.split("\n").slice(1).every((l) => l.split(" == ").length === 2)).toBe(true);
+    const now = Date.now();
+    const decks = listDecks(db, now, now + 1);
+    expect(decks.map((d) => [d.title, d.total])).toEqual([
+      ["Englisch Vokabeln", 4],
+      ["Sortieralgorithmen", 6],
+    ]);
+    // 2 neue + 2 überfällige im Informatik-Stapel, 4 neue Vokabeln
+    expect(decks.map((d) => d.due)).toEqual([4, 4]);
   });
 });

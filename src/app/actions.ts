@@ -23,16 +23,16 @@ import { CATEGORIES } from "@/lib/mail/policy";
 import { getSettings, setSetting } from "@/lib/settings";
 import { getOrCreateBriefing } from "@/lib/briefing";
 import { BudgetExceededError } from "@/lib/openai";
+import { addCards, createDeck, deleteCard, deleteDeck, renameDeck, reviewCard, updateCard } from "@/lib/flashcards";
+import type { CardState, Rating } from "@/lib/fsrs";
 import {
   addMaterial,
-  deleteFlashcardSet,
   deleteMaterial,
   deletePlan,
   generateFlashcards,
   generateStudyPlan,
   MAX_FILE_BYTES,
   prepareMaterial,
-  saveFlashcardSet,
   savePlan,
   setPlanArchived,
   StudyError,
@@ -425,19 +425,84 @@ export async function generateFlashcardsAction(_prev: FormState, formData: FormD
   const count = z.coerce.number().int().min(5).max(100).safeParse(formData.get("count"));
   if (!materialId.success) return { ok: false, message: "Ungültiges Material" };
   if (!count.success) return { ok: false, message: "5 bis 100 Karten" };
+  let n: number;
+  let title: string;
   try {
-    const set = await generateFlashcards(db(), materialId.data, count.data);
-    saveFlashcardSet(db(), { materialId: materialId.data, ...set });
+    const res = await generateFlashcards(db(), materialId.data, count.data);
+    const deck = createDeck(db(), { title: res.title, subject: res.subject, materialId: materialId.data });
+    n = addCards(db(), deck, res.cards);
+    title = res.title;
   } catch (err) {
     return studyFailure(err);
   }
-  revalidatePath("/lernen");
-  return { ok: true, message: "Karteikarten erstellt – unten bei „Karteikarten“" };
+  revalidatePath("/", "layout");
+  return { ok: true, message: `${n} Karten im Stapel „${title}“ – unten bei „Karteikarten“` };
 }
 
-export async function deleteFlashcardSetAction(setId: number) {
-  deleteFlashcardSet(db(), id.parse(setId));
-  revalidatePath("/lernen");
+const deckSchema = z.object({
+  title: z.string().trim().min(1, "Name fehlt").max(120, "Maximal 120 Zeichen"),
+  subject: z.string().trim().max(60, "Fach: maximal 60 Zeichen"),
+});
+
+export async function createDeckAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const parsed = deckSchema.safeParse({ title: formData.get("title") ?? "", subject: formData.get("subject") ?? "" });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
+  const deckId = createDeck(db(), { title: parsed.data.title, subject: parsed.data.subject || null });
+  revalidatePath("/", "layout");
+  redirect(`/lernen/stapel?id=${deckId}`);
+}
+
+export async function renameDeckAction(deckId: number, _prev: FormState, formData: FormData): Promise<FormState> {
+  const parsed = deckSchema.safeParse({ title: formData.get("title") ?? "", subject: formData.get("subject") ?? "" });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
+  renameDeck(db(), id.parse(deckId), { title: parsed.data.title, subject: parsed.data.subject || null });
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Gespeichert" };
+}
+
+export async function deleteDeckAction(deckId: number) {
+  deleteDeck(db(), id.parse(deckId));
+  revalidatePath("/", "layout");
+  redirect("/lernen");
+}
+
+const cardSchema = z.object({
+  front: z.string().trim().min(1, "Vorderseite fehlt").max(1000, "Vorderseite: maximal 1000 Zeichen"),
+  back: z.string().trim().min(1, "Rückseite fehlt").max(2000, "Rückseite: maximal 2000 Zeichen"),
+});
+
+export async function addCardAction(deckId: number, _prev: FormState, formData: FormData): Promise<FormState> {
+  const parsed = cardSchema.safeParse({ front: formData.get("front") ?? "", back: formData.get("back") ?? "" });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
+  addCards(db(), id.parse(deckId), [parsed.data]);
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Karte hinzugefügt" };
+}
+
+export async function updateCardAction(cardId: number, front: string, back: string): Promise<FormState> {
+  const parsed = cardSchema.safeParse({ front, back });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
+  updateCard(db(), id.parse(cardId), parsed.data);
+  revalidatePath("/lernen", "layout");
+  return { ok: true, message: "Gespeichert" };
+}
+
+export async function deleteCardAction(cardId: number) {
+  deleteCard(db(), id.parse(cardId));
+  revalidatePath("/", "layout");
+}
+
+/** Bewertung speichern; der neue Zustand geht zurück, damit Lernkarten in derselben Sitzung wiederkommen. */
+export async function reviewCardAction(cardId: number, rating: Rating): Promise<CardState | null> {
+  const card = reviewCard(db(), id.parse(cardId), z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).parse(rating));
+  if (!card) return null;
+  const { due, stability, difficulty, elapsedDays, scheduledDays, learningSteps, reps, lapses, state, lastReview } = card;
+  return { due, stability, difficulty, elapsedDays, scheduledDays, learningSteps, reps, lapses, state, lastReview };
+}
+
+/** Am Ende einer Sitzung: Zähler auf „Heute“ und im Lernen-Tab aktualisieren. */
+export async function finishReviewAction() {
+  revalidatePath("/", "layout");
 }
 
 // ---------------------------------------------------------------------------

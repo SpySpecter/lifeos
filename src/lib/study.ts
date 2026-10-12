@@ -7,7 +7,7 @@ import { addDays, formatDayLong, weekdayShort } from "./time";
 
 /**
  * Lernen: Markdown-Material (vorher aus PDFs umgewandelt – das spart Token gegenüber PDFs), daraus
- * KI-Lernpläne bis zur Klausur und Karteikarten im RemNote-Format „Frage == Antwort“.
+ * KI-Lernpläne bis zur Klausur und Karteikarten (gespeichert und wiederholt in `flashcards.ts`).
  */
 
 export type Material = { id: number; title: string; subject: string | null; chars: number; createdAt: number; preview: string };
@@ -32,7 +32,6 @@ export type StudyPlan = {
   nextDay: string | null;
 };
 
-export type FlashcardSet = { id: number; materialId: number | null; title: string; content: string; cards: number; createdAt: number };
 export type CardSection = { heading: string; cards: { front: string; back: string }[] };
 
 /** Fehler mit Text für die Oberfläche. */
@@ -271,69 +270,6 @@ export const openStudyMinutes = (db: DB, day: string) =>
     .filter((s) => !s.done)
     .reduce((n, s) => n + s.minutes, 0);
 
-export function saveFlashcardSet(db: DB, s: { materialId: number | null; title: string; content: string }): number {
-  const res = db
-    .prepare("INSERT INTO flashcard_sets (material_id, title, content, created_at) VALUES (?, ?, ?, ?)")
-    .run(s.materialId, s.title, s.content, Date.now());
-  return Number(res.lastInsertRowid);
-}
-
-export function listFlashcardSets(db: DB): FlashcardSet[] {
-  const rows = db.prepare("SELECT * FROM flashcard_sets ORDER BY created_at DESC, id DESC").all() as {
-    id: number;
-    material_id: number | null;
-    title: string;
-    content: string;
-    created_at: number;
-  }[];
-  return rows.map((r) => ({ id: r.id, materialId: r.material_id, title: r.title, content: r.content, cards: countCards(r.content), createdAt: r.created_at }));
-}
-
-export function deleteFlashcardSet(db: DB, id: number): void {
-  db.prepare("DELETE FROM flashcard_sets WHERE id = ?").run(id);
-}
-
-// ---------------------------------------------------------------------------
-// RemNote
-
-/** Zeichenfolgen, die RemNote als Karten-Trenner liest. */
-const REMNOTE_SEPARATORS = ["==", ">>", "<<", "<>", "::", ";;"];
-const ZWSP = "\u200B";
-
-/** Eine Karte muss eine Zeile bleiben und darf nur den einen Trenner enthalten – sonst zerfällt sie in RemNote. */
-export function remNoteText(s: string): string {
-  let out = s
-    .replace(/\s*\n+\s*/g, " · ")
-    .replace(/\s+/g, " ")
-    .replace(/^#+\s*/, "")
-    .trim();
-  let prev: string;
-  do {
-    prev = out;
-    // unsichtbares Leerzeichen zwischen die beiden Zeichen: sieht gleich aus, ist aber kein Trenner mehr
-    for (const sep of REMNOTE_SEPARATORS) out = out.replaceAll(sep, `${sep[0]}${ZWSP}${sep[1]}`);
-  } while (out !== prev);
-  return out;
-}
-
-/** `# Abschnitt` und darunter je Karte eine Zeile `Frage == Antwort`. */
-export function toRemNote(sections: CardSection[]): string {
-  return sections
-    .map((s) => {
-      const cards = s.cards
-        .map((c) => [remNoteText(c.front), remNoteText(c.back)])
-        .filter(([f, b]) => f && b)
-        .map(([f, b]) => `${f} == ${b}`);
-      if (!cards.length) return null;
-      const heading = remNoteText(s.heading);
-      return [heading ? `# ${heading}` : null, ...cards].filter(Boolean).join("\n");
-    })
-    .filter(Boolean)
-    .join("\n\n");
-}
-
-export const countCards = (remnote: string) => remnote.split("\n").filter((l) => l.includes(" == ")).length;
-
 // ---------------------------------------------------------------------------
 // KI: Lernplan
 
@@ -458,11 +394,11 @@ export async function generateStudyPlan(db: DB, req: PlanRequest, today: string)
 // ---------------------------------------------------------------------------
 // KI: Karteikarten
 
-const CARDS_INSTRUCTIONS = `Du erstellst Karteikarten für RemNote aus Unterrichtsmaterial (Markdown) für einen Oberstufenschüler.
+const CARDS_INSTRUCTIONS = `Du erstellst Karteikarten zum Wiederholen (Spaced Repetition) aus Unterrichtsmaterial (Markdown) für einen Oberstufenschüler.
 - Etwa so viele Karten wie verlangt, verteilt über das ganze Material, nach Abschnitten gruppiert (heading = Abschnitt bzw. Thema).
 - front: präzise Frage oder Begriff. back: knappe, richtige Antwort (höchstens 1–2 Sätze oder eine kurze Aufzählung in einer Zeile).
 - Eine Karte = ein Fakt. Keine Ja/Nein-Fragen, nichts zu Seitenzahlen, Aufgabennummern oder Formalien des Dokuments.
-- Nur Inhalte aus dem Material. Formeln als Text (z. B. a^2 + b^2 = c^2), keine Zeilenumbrüche, nie „==“ schreiben.
+- Nur Inhalte aus dem Material. Formeln als Text (z. B. a^2 + b^2 = c^2).
 - Sprache des Materials beibehalten (meist Deutsch; englisches Material → englische Karten).`;
 
 const CARDS_SCHEMA = {
@@ -503,7 +439,11 @@ function demoCards(m: MaterialText, count: number): CardSection[] {
   ];
 }
 
-export async function generateFlashcards(db: DB, materialId: number, count: number): Promise<{ title: string; content: string }> {
+export async function generateFlashcards(
+  db: DB,
+  materialId: number,
+  count: number,
+): Promise<{ title: string; subject: string | null; cards: { front: string; back: string; section: string | null }[] }> {
   const [m] = getMaterials(db, [materialId]);
   if (!m) throw new StudyError("Material nicht gefunden.");
   let sections: CardSection[];
@@ -519,7 +459,11 @@ export async function generateFlashcards(db: DB, materialId: number, count: numb
     });
     sections = res.sections;
   }
-  const content = toRemNote(sections);
-  if (!countCards(content)) throw new StudyError("Aus diesem Material ließen sich keine Karten erstellen.");
-  return { title: m.title, content };
+  const cards = sections.flatMap((s) =>
+    s.cards
+      .map((c) => ({ front: c.front.trim(), back: c.back.trim(), section: s.heading.replace(/^#+\s*/, "").trim() || null }))
+      .filter((c) => c.front && c.back),
+  );
+  if (!cards.length) throw new StudyError("Aus diesem Material ließen sich keine Karten erstellen.");
+  return { title: m.title, subject: m.subject, cards };
 }

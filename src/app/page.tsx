@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Suspense, type ComponentType } from "react";
 import { ExpandableTile, TileSkeleton } from "@/components/ios/expandable-tile";
 import { WidgetSkeleton } from "@/components/widget-card";
+import { CardsWidget } from "@/components/widgets/cards-widget";
 import { CalendarWidget } from "@/components/widgets/calendar-widget";
 import { ExamsWidget } from "@/components/widgets/exams-widget";
 import { GitHubWidget } from "@/components/widgets/github-widget";
@@ -33,6 +34,7 @@ const FULL: Record<WidgetId, ComponentType> = {
   news: NewsWidget,
   music: SpotifyWidget,
   github: GitHubWidget,
+  cards: CardsWidget,
 };
 
 /** Sprungziele für die Tage-Kacheln */

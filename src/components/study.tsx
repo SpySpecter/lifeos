@@ -1,11 +1,10 @@
 "use client";
 
-import { Archive, ArchiveRestore, Check, Copy, Download, FileUp, Layers, Sparkles, Trash2 } from "lucide-react";
+import { Archive, ArchiveRestore, Check, FileUp, Layers, Sparkles, Trash2 } from "lucide-react";
 import { useActionState, useMemo, useOptimistic, useState, useTransition } from "react";
 import {
   archivePlanAction,
   createStudyPlanAction,
-  deleteFlashcardSetAction,
   deleteMaterialAction,
   deletePlanAction,
   generateFlashcardsAction,
@@ -293,7 +292,7 @@ export function MaterialRow({ material, cost }: { material: MaterialOption & { p
   const [state, action, pending] = useActionState<FormState, FormData>(generateFlashcardsAction, null);
   const [count, setCount] = useState(20);
   const remove = () => {
-    if (confirm(`„${material.title}“ löschen? Erstellte Karteikarten bleiben erhalten.`)) start(() => deleteMaterialAction(material.id));
+    if (confirm(`„${material.title}“ löschen? Erstellte Karteikarten-Stapel bleiben erhalten.`)) start(() => deleteMaterialAction(material.id));
   };
   return (
     <li className="py-3">
@@ -343,54 +342,6 @@ export function MaterialRow({ material, cost }: { material: MaterialOption & { p
         <span className="text-footnote text-muted-foreground tabular-nums">{costText(cost, material.chars, count * 50)}</span>
         <Status state={state} />
       </form>
-    </li>
-  );
-}
-
-/** Karteikarten im RemNote-Format: kopieren und in RemNote einfügen oder als .md laden. */
-export function FlashcardSetView({ set }: { set: { id: number; title: string; content: string; cards: number; created: string } }) {
-  const [, start] = useTransition();
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(set.content);
-      haptic();
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      alert("Kopieren nicht möglich – Text bitte markieren und manuell kopieren.");
-    }
-  };
-  const download = () => {
-    const url = URL.createObjectURL(new Blob([set.content], { type: "text/markdown;charset=utf-8" }));
-    const a = Object.assign(document.createElement("a"), { href: url, download: `${set.title.replace(/[^\p{L}\p{N} _-]+/gu, "").trim() || "Karteikarten"}.md` });
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-  const remove = () => {
-    if (confirm(`Karteikarten „${set.title}“ löschen?`)) start(() => deleteFlashcardSetAction(set.id));
-  };
-  return (
-    <li className="py-3">
-      <p className="truncate text-body font-semibold">{set.title}</p>
-      <p className="text-footnote text-muted-foreground tabular-nums">
-        {set.cards} Karten · {set.created}
-      </p>
-      <pre className="mt-2 max-h-64 overflow-auto rounded-[10px] bg-muted p-3 font-mono text-footnote whitespace-pre-wrap">{set.content}</pre>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <Button type="button" size="sm" variant="outline" onClick={copy}>
-          {copied ? <Check aria-hidden /> : <Copy aria-hidden />}
-          {copied ? "Kopiert" : "Kopieren"}
-        </Button>
-        <Button type="button" size="sm" variant="outline" onClick={download}>
-          <Download aria-hidden />
-          Als .md laden
-        </Button>
-        <Button type="button" size="sm" variant="ghost" className="text-critical" onClick={remove}>
-          <Trash2 aria-hidden />
-          Löschen
-        </Button>
-      </div>
     </li>
   );
 }

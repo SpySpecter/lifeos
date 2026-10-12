@@ -1,17 +1,19 @@
 import type { Metadata } from "next";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Repeat, Zap } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 import { SettingsLink } from "@/components/nav";
 import { PageHeader } from "@/components/page-header";
-import { FlashcardSetView, MaterialRow, MaterialUpload, StudyPlanForm, StudySessionList, type CostInfo } from "@/components/study";
+import { NewDeckForm } from "@/components/flashcards";
+import { MaterialRow, MaterialUpload, StudyPlanForm, StudySessionList, type CostInfo } from "@/components/study";
 import { WidgetCard, WidgetSkeleton } from "@/components/widget-card";
 import { upcoming } from "@/integrations/exams";
-import { currentDay, loadExams } from "@/integrations/loaders";
+import { currentDay, loadDecks, loadExams } from "@/integrations/loaders";
 import { db } from "@/lib/db";
 import { env, isDemo } from "@/lib/env";
 import { costUsd } from "@/lib/openai";
-import { examCountdown, listFlashcardSets, listMaterials, listPlans, MAX_CONTEXT_CHARS, todaysSessions, type StudyPlan } from "@/lib/study";
+import type { Deck } from "@/lib/flashcards";
+import { examCountdown, listMaterials, listPlans, MAX_CONTEXT_CHARS, todaysSessions, type StudyPlan } from "@/lib/study";
 import { addDays } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -122,29 +124,63 @@ async function MaterialsCard() {
   );
 }
 
-async function FlashcardsCard() {
-  await currentDay();
-  const sets = listFlashcardSets(db());
+function DeckRow({ deck }: { deck: Deck }) {
   return (
-    <WidgetCard title="Karteikarten" footer="RemNote-Format „Frage == Antwort“, eine Karte pro Zeile – kopieren und direkt in RemNote einfügen.">
-      {sets.length ? (
-        <ul className="-my-3 ios-rows">
-          {sets.map((s) => (
-            <FlashcardSetView
-              key={s.id}
-              set={{
-                id: s.id,
-                title: s.title,
-                content: s.content,
-                cards: s.cards,
-                created: new Date(s.createdAt).toLocaleDateString("de-DE", { day: "numeric", month: "short", timeZone: env().APP_TZ }),
-              }}
-            />
+    <li className="flex items-center gap-2 py-2.5">
+      <Link href={`/lernen/stapel?id=${deck.id}`} className="-my-2.5 -ml-4 min-w-0 flex-1 py-2.5 pl-4 active:bg-muted">
+        <p className="truncate text-body font-semibold">{deck.title}</p>
+        <p className="text-footnote text-muted-foreground tabular-nums">
+          {[deck.subject, `${deck.total} Karten`, deck.fresh ? `${deck.fresh} neu` : null].filter(Boolean).join(" · ")}
+        </p>
+      </Link>
+      <Link
+        href={`/lernen/wiederholen?deck=${deck.id}`}
+        aria-disabled={!deck.due}
+        className={cn(
+          "flex min-h-9 shrink-0 items-center gap-1 rounded-full px-3 text-subhead font-semibold tabular-nums",
+          deck.due ? "bg-tint text-white active:opacity-70" : "pointer-events-none bg-muted text-muted-foreground",
+        )}
+      >
+        <Repeat className="size-3.5" aria-hidden />
+        {deck.due ? `${deck.due} fällig` : "fertig"}
+      </Link>
+      <Link
+        href={`/lernen/wiederholen?deck=${deck.id}&modus=quick`}
+        aria-label={`${deck.title}: Quick Learn`}
+        className={cn("grid size-9 shrink-0 place-items-center rounded-full bg-muted text-tint-text active:opacity-70", !deck.total && "pointer-events-none opacity-50")}
+      >
+        <Zap className="size-4" aria-hidden />
+      </Link>
+    </li>
+  );
+}
+
+async function FlashcardsCard() {
+  const decks = await loadDecks();
+  const due = decks.reduce((n, d) => n + d.due, 0);
+  return (
+    <WidgetCard
+      title="Karteikarten"
+      action={
+        due ? (
+          <Link href="/lernen/wiederholen" className="flex min-h-11 items-center gap-1 rounded-full px-2 text-body text-tint-text active:opacity-60 tabular-nums">
+            Alle {due} lernen
+            <ChevronRight className="size-5" aria-hidden />
+          </Link>
+        ) : null
+      }
+      footer="Wiederholen plant die Abstände mit FSRS. ⚡ Quick Learn geht einen Stapel einfach durch, bis alles sitzt."
+    >
+      {decks.length ? (
+        <ul className="-my-2.5 ios-rows">
+          {decks.map((d) => (
+            <DeckRow key={d.id} deck={d} />
           ))}
         </ul>
       ) : (
-        <Empty>Noch keine Karteikarten – bei einem Material auf „Karteikarten“ tippen.</Empty>
+        <Empty>Noch keine Karteikarten – bei einem Material auf „Karteikarten“ tippen oder einen eigenen Stapel anlegen.</Empty>
       )}
+      <NewDeckForm />
     </WidgetCard>
   );
 }
