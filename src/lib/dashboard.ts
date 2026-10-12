@@ -13,6 +13,7 @@ export const WIDGETS = {
   music: "Musik",
   github: "GitHub",
   cards: "Karteikarten",
+  grades: "Noten",
 } as const;
 
 export type WidgetId = keyof typeof WIDGETS;
@@ -36,6 +37,7 @@ export const DEFAULT_LAYOUT: DashboardLayout = [
   { id: "music", mode: "compact" },
   { id: "github", mode: "compact" },
   { id: "cards", mode: "compact" },
+  { id: "grades", mode: "compact" },
 ];
 
 /** Gespeichertes Layout bereinigen: unbekannte/doppelte Einträge raus, neue Widgets mit Standard hinten an. */

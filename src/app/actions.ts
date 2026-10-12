@@ -40,6 +40,20 @@ import {
   toggleSession,
 } from "@/lib/study";
 import { cancelFocus, finishFocus, knownSubjects, startFocus, updateFocus } from "@/lib/focus";
+import {
+  addGrade,
+  addGradeCourse,
+  deleteGrade,
+  deleteGradeCourse,
+  GRADE_KINDS,
+  importGradeCourses,
+  SEMESTERS,
+  setOverride,
+  updateGradeCourse,
+} from "@/lib/grades";
+import { parseCourse } from "@/lib/courses";
+import { load } from "@/integrations/core";
+import { untis } from "@/integrations/untis";
 
 const id = z.number().int().positive();
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -507,6 +521,102 @@ export async function reviewCardAction(cardId: number, rating: Rating): Promise<
   if (!card) return null;
   const { due, stability, difficulty, elapsedDays, scheduledDays, learningSteps, reps, lapses, state, lastReview } = card;
   return { due, stability, difficulty, elapsedDays, scheduledDays, learningSteps, reps, lapses, state, lastReview };
+}
+
+// ─── Noten ───────────────────────────────────────────────────────────────
+
+const semester = z.enum(SEMESTERS);
+const points = z.coerce.number().int().min(0, "0 bis 15 Punkte").max(15, "0 bis 15 Punkte");
+const courseKind = z.enum(["LK", "GK", "SK"]);
+const optionalInt = (min: number, max: number) =>
+  z.preprocess((v) => (v === "" || v === null || v === undefined ? null : v), z.coerce.number().int().min(min).max(max).nullable());
+
+function gradesChanged() {
+  revalidatePath("/noten");
+  revalidatePath("/", "layout");
+}
+
+export async function addGradeCourseAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const parsed = z
+    .object({ subject: z.string().trim().min(1, "Fach fehlt").max(60, "Maximal 60 Zeichen"), kind: courseKind })
+    .safeParse({ subject: formData.get("subject") ?? "", kind: formData.get("kind") ?? "GK" });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
+  addGradeCourse(db(), parsed.data);
+  gradesChanged();
+  return { ok: true, message: `${parsed.data.subject} (${parsed.data.kind}) angelegt` };
+}
+
+/** Kurse aus dem Stundenplan übernehmen (LK, GK, Seminarkurs). */
+export async function importGradeCoursesAction(): Promise<FormState> {
+  const week = await load(untis, undefined);
+  if (week.status !== "ok") return { ok: false, message: "Stundenplan gerade nicht erreichbar" };
+  const courses = week.data.days
+    .flatMap((d) => d.lessons)
+    .map((l) => parseCourse(l.subject))
+    .filter((c) => c.kind)
+    .map((c) => ({ subject: c.title, kind: (c.kind === "Seminarkurs" ? "SK" : c.kind) as "LK" | "GK" | "SK" }));
+  if (!courses.length) return { ok: false, message: "Keine Oberstufenkurse (LK/GK) im Stundenplan gefunden" };
+  const n = importGradeCourses(db(), courses);
+  gradesChanged();
+  return { ok: true, message: n ? `${n} ${n === 1 ? "Kurs" : "Kurse"} übernommen` : "Alle Kurse sind schon da" };
+}
+
+export async function updateGradeCourseAction(courseId: number, _prev: FormState, formData: FormData): Promise<FormState> {
+  const parsed = z
+    .object({
+      subject: z.string().trim().min(1, "Fach fehlt").max(60),
+      kind: courseKind,
+      klausurWeight: z.coerce.number().min(0).max(1),
+      target: optionalInt(1, 15),
+      examSlot: optionalInt(1, 5),
+      examExpected: optionalInt(0, 15),
+    })
+    .safeParse({
+      subject: formData.get("subject") ?? "",
+      kind: formData.get("kind") ?? "GK",
+      klausurWeight: formData.get("klausurWeight") ?? "0.5",
+      target: formData.get("target"),
+      examSlot: formData.get("examSlot"),
+      examExpected: formData.get("examExpected"),
+    });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
+  updateGradeCourse(db(), id.parse(courseId), parsed.data);
+  const official = optionalInt(0, 15).safeParse(formData.get("official"));
+  const sem = semester.safeParse(formData.get("semester"));
+  if (official.success && sem.success) setOverride(db(), courseId, sem.data, official.data);
+  gradesChanged();
+  return { ok: true, message: "Gespeichert" };
+}
+
+export async function deleteGradeCourseAction(courseId: number) {
+  deleteGradeCourse(db(), id.parse(courseId));
+  gradesChanged();
+}
+
+export async function addGradeAction(courseId: number, _prev: FormState, formData: FormData): Promise<FormState> {
+  const parsed = z
+    .object({ semester, kind: z.enum(GRADE_KINDS), points, label: z.string().trim().max(60), weight: z.coerce.number().min(0.25).max(4) })
+    .safeParse({
+      semester: formData.get("semester"),
+      kind: formData.get("kind") ?? "klausur",
+      points: formData.get("points") ?? "",
+      label: formData.get("label") ?? "",
+      weight: formData.get("weight") || "1",
+    });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
+  addGrade(db(), { courseId: id.parse(courseId), ...parsed.data, day: today(env().APP_TZ) });
+  gradesChanged();
+  return { ok: true, message: "Eingetragen" };
+}
+
+export async function deleteGradeAction(gradeId: number) {
+  deleteGrade(db(), id.parse(gradeId));
+  gradesChanged();
+}
+
+export async function setGradeSemesterAction(value: string) {
+  setSetting(db(), "gradeSemester", semester.parse(value));
+  gradesChanged();
 }
 
 // ─── Fokus-Timer ─────────────────────────────────────────────────────────

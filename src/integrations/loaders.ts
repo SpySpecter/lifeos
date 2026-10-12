@@ -7,6 +7,7 @@ import { env, isDemo } from "@/lib/env";
 import { mailAssistantData, type MailAssistantData } from "@/lib/mail/triage";
 import { getSettings } from "@/lib/settings";
 import { dayEnd, listDecks } from "@/lib/flashcards";
+import { listGradeCourses, projection } from "@/lib/grades";
 import { listHabits } from "@/lib/habits";
 import { healthSeries } from "@/lib/health";
 import { lastDays, today } from "@/lib/time";
@@ -60,6 +61,12 @@ export const cardWindow = cache(async () => {
 export const loadDecks = cache(async () => {
   const { now, end } = await cardWindow();
   return listDecks(db(), now, end);
+});
+
+export const loadGrades = cache(async () => {
+  const { gradeSemester: semester } = await loadSettings();
+  const courses = listGradeCourses(db());
+  return { semester, courses, projection: projection(courses) };
 });
 
 export const loadSettings = cache(async () => {

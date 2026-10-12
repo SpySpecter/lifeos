@@ -15,6 +15,8 @@ export type Settings = {
   lastCalendar: string | null;
   /** Drive aufräumen: Ordnernamen, deren Dateien nie angefasst werden */
   driveProtected: string[];
+  /** Noten: aktuelles Halbjahr der Qualifikationsphase */
+  gradeSemester: "Q1" | "Q2" | "Q3" | "Q4";
 };
 
 export const DEFAULT_MAIL_PROFILE = `Ich bin Schüler in der Oberstufe (Brandenburg, LK Informatik) und programmiere viel (GitHub, KI-Tools, eigener VPS).
@@ -37,6 +39,7 @@ export function defaultSettings(): Settings {
     briefing: { enabled: true, time: "06:30", weekends: false },
     lastCalendar: null,
     driveProtected: [],
+    gradeSemester: "Q1",
   };
 }
 

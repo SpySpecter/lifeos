@@ -85,6 +85,35 @@ function seedStudy(db: DB, day: string): void {
   addCards(db, vocab, DEMO_VOCAB, now);
 }
 
+/** Noten: Q1 abgeschlossen (Zeugnis), Q2 läuft – Mathe-LK mit Ziel 12. */
+function seedGrades(db: DB, day: string): void {
+  db.exec("DELETE FROM grade_courses;");
+  const courses: [string, "LK" | "GK" | "SK", number | null, number | null, number, [string, number][]][] = [
+    // Fach, Kursart, Prüfungsfach, Ziel, Q1-Zeugnis, Noten in Q2
+    ["Mathematik", "LK", 1, 12, 11, [["klausur", 10], ["muendlich", 13]]],
+    ["Informatik", "LK", 2, 14, 14, [["klausur", 14], ["muendlich", 15], ["sonstig", 13]]],
+    ["Deutsch", "GK", 3, null, 9, [["muendlich", 10]]],
+    ["Englisch", "GK", 4, null, 10, [["klausur", 11]]],
+    ["Geschichte", "GK", 5, null, 8, [["muendlich", 9]]],
+    ["Physik", "GK", null, null, 7, [["klausur", 6], ["muendlich", 8]]],
+    ["Seminarkurs", "SK", null, null, 12, []],
+  ];
+  courses.forEach(([subject, kind, slot, target, q1, q2], pos) => {
+    const id = Number(
+      db
+        .prepare("INSERT INTO grade_courses (subject, kind, exam_slot, target, position, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(subject, kind, slot, target, pos, Date.now()).lastInsertRowid,
+    );
+    db.prepare("INSERT INTO grade_overrides (course_id, semester, points) VALUES (?, 'Q1', ?)").run(id, q1);
+    q2.forEach(([kindOf, points], i) =>
+      db
+        .prepare("INSERT INTO grades (course_id, semester, kind, points, label, day, created_at) VALUES (?, 'Q2', ?, ?, ?, ?, ?)")
+        .run(id, kindOf, points, kindOf === "klausur" ? "1. Klausur" : null, addDays(day, -20 + i * 6), Date.now()),
+    );
+  });
+  db.prepare("INSERT INTO settings (key, value) VALUES ('gradeSemester', '\"Q2\"') ON CONFLICT(key) DO UPDATE SET value = excluded.value").run();
+}
+
 /** Drive aufräumen: ein abgeschlossener Lauf mit offenen Fragen und Dateien im Papierkorb. */
 function seedDrive(db: DB): void {
   db.exec("DELETE FROM drive_items; DELETE FROM drive_runs;");
@@ -159,6 +188,7 @@ export function seedDemoData(db: DB, day: string = today()): void {
     });
 
     seedStudy(db, day);
+    seedGrades(db, day);
     seedDrive(db);
 
     for (const d of days.slice(-60)) {

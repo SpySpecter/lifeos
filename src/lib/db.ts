@@ -271,6 +271,38 @@ const MIGRATIONS: string[] = [
   CREATE INDEX focus_sessions_started ON focus_sessions (started_at);
   CREATE INDEX focus_sessions_open ON focus_sessions (ended_at, ends_at);
   `,
+  `
+  -- Noten: Kurse der Qualifikationsphase (Q1–Q4), Einzelnoten und offizielle Halbjahresnoten
+  CREATE TABLE grade_courses (
+    id             INTEGER PRIMARY KEY,
+    subject        TEXT NOT NULL,
+    kind           TEXT NOT NULL DEFAULT 'GK',   -- 'LK' | 'GK' | 'SK'
+    klausur_weight REAL NOT NULL DEFAULT 0.5,    -- Anteil der Klausuren an der Halbjahresnote
+    target         INTEGER,                      -- Wunschpunkte, z. B. 12
+    exam_slot      INTEGER,                      -- Prüfungsfach 1–5 (Block II)
+    exam_expected  INTEGER,                      -- erwartete Punkte in der Abiturprüfung
+    position       INTEGER NOT NULL DEFAULT 0,
+    created_at     INTEGER NOT NULL
+  );
+  CREATE TABLE grades (
+    id         INTEGER PRIMARY KEY,
+    course_id  INTEGER NOT NULL REFERENCES grade_courses(id) ON DELETE CASCADE,
+    semester   TEXT NOT NULL,                    -- 'Q1' … 'Q4'
+    kind       TEXT NOT NULL,                    -- 'klausur' | 'muendlich' | 'sonstig'
+    points     INTEGER NOT NULL,                 -- 0–15
+    weight     REAL NOT NULL DEFAULT 1,
+    label      TEXT,
+    day        TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX grades_course ON grades (course_id, semester);
+  CREATE TABLE grade_overrides (
+    course_id INTEGER NOT NULL REFERENCES grade_courses(id) ON DELETE CASCADE,
+    semester  TEXT NOT NULL,
+    points    INTEGER NOT NULL,
+    PRIMARY KEY (course_id, semester)
+  );
+  `,
 ];
 
 export type DB = DatabaseSync;

@@ -6,6 +6,7 @@ import {
   Heart,
   Inbox,
   Layers,
+  Award,
   ListChecks,
   MailCheck,
   Music,
@@ -16,6 +17,7 @@ import {
 import {
   currentDay,
   loadDecks,
+  loadGrades,
   loadExams,
   loadGitHub,
   loadGoogle,
@@ -30,6 +32,7 @@ import {
 } from "@/integrations/loaders";
 import type { WidgetResult } from "@/integrations/core";
 import type { WidgetId } from "@/lib/dashboard";
+import { formatNote, formatPoints } from "@/lib/grades";
 import { examTile, lessonTile, weatherTile, type Tone } from "@/lib/hero";
 import { dayString, formatTime } from "@/lib/time";
 
@@ -174,6 +177,18 @@ const SUMMARIES: Record<WidgetId, () => Promise<Summary>> = {
       unit: decks.length ? "fällig" : undefined,
       caption: !decks.length ? "Noch keine Stapel" : due ? `in ${decks.filter((d) => d.due).length} von ${decks.length} Stapeln` : "Alles wiederholt 🎉",
       tone: due >= 50 ? "warning" : "normal",
+    };
+  },
+  async grades() {
+    const { semester, courses, projection: p } = await loadGrades();
+    const base = { icon: Award, color: "var(--cat-grades)", title: "Noten" };
+    if (!courses.length || p.note === null) return { ...base, value: "–", caption: courses.length ? "Noch keine Noten eingetragen" : "Noch keine Kurse" };
+    return {
+      ...base,
+      value: formatNote(p.note),
+      unit: "Abi-Schnitt",
+      caption: `Ø ${formatPoints(p.average ?? 0)} P. bis ${semester}${p.under5 ? ` · ${p.under5}× unter 5` : ""}`,
+      captionTone: p.under5 ? "critical" : "normal",
     };
   },
 };
