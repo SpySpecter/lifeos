@@ -11,6 +11,10 @@ export type Settings = {
   dashboard: DashboardLayout;
   /** Morgenbriefing als Push; die Seite /briefing gibt es immer */
   briefing: { enabled: boolean; time: string; weekends: boolean };
+  /** zuletzt für neue Termine genutzter Kalender, "<konto>|<kalender-id>" */
+  lastCalendar: string | null;
+  /** Drive aufräumen: Ordnernamen, deren Dateien nie angefasst werden */
+  driveProtected: string[];
 };
 
 export const DEFAULT_MAIL_PROFILE = `Ich bin Schüler in der Oberstufe (Brandenburg, LK Informatik) und programmiere viel (GitHub, KI-Tools, eigener VPS).
@@ -31,6 +35,8 @@ export function defaultSettings(): Settings {
     mailProfile: DEFAULT_MAIL_PROFILE,
     dashboard: DEFAULT_LAYOUT,
     briefing: { enabled: true, time: "06:30", weekends: false },
+    lastCalendar: null,
+    driveProtected: [],
   };
 }
 

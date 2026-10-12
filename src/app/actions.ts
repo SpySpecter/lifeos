@@ -11,10 +11,14 @@ import { isSingleEmoji, suggestEmoji } from "@/lib/emoji";
 import { addHabit, archiveHabit, deleteHabit, reorderHabits, restoreHabit, toggleHabit, updateHabit } from "@/lib/habits";
 import { deleteSubscription, saveSubscription, sendToAll } from "@/lib/push";
 import { METRIC_KEYS, parseLooseNumber, upsertHealth, type HealthValues } from "@/lib/health";
-import { today } from "@/lib/time";
+import { today, zonedToEpoch } from "@/lib/time";
+import { completeReminder, createReminder, deleteReminder } from "@/lib/one-off-reminders";
+import { parseQuickEntry, REMIND_BEFORE, type QuickEntry } from "@/lib/quick-entry";
+import { createCalendarEvent, eventEnd, writableCalendars, type WritableCalendar } from "@/integrations/google";
 import { deleteToken } from "@/lib/tokens";
 import { isDemo } from "@/lib/env";
 import { clearInbox, decideMail, runTriage, undoMail, upsertRule } from "@/lib/mail/triage";
+import { decideDriveItem, markDriveItem, startDriveCleanup, undoDriveItem } from "@/lib/drive/cleanup";
 import { CATEGORIES } from "@/lib/mail/policy";
 import { getSettings, setSetting } from "@/lib/settings";
 import { getOrCreateBriefing } from "@/lib/briefing";
@@ -434,4 +438,187 @@ export async function generateFlashcardsAction(_prev: FormState, formData: FormD
 export async function deleteFlashcardSetAction(setId: number) {
   deleteFlashcardSet(db(), id.parse(setId));
   revalidatePath("/lernen");
+}
+
+// ---------------------------------------------------------------------------
+// Erinnerungen und Termine (Plus-Knopf auf „Heute“)
+
+const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Uhrzeit im Format HH:MM");
+
+const reminderSchema = z.object({
+  title: z.string().trim().min(1, "Titel fehlt").max(120, "Maximal 120 Zeichen"),
+  note: z.string().trim().max(300),
+  date: day,
+  time: hhmm,
+});
+
+export async function createReminderAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const parsed = reminderSchema.safeParse({
+    title: formData.get("title") ?? "",
+    note: formData.get("note") ?? "",
+    date: formData.get("date") ?? "",
+    time: formData.get("time") ?? "",
+  });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Ungültige Eingabe" };
+  const r = parsed.data;
+  const dueAt = zonedToEpoch(r.date, r.time, env().APP_TZ);
+  if (dueAt < Date.now() - 60_000) return { ok: false, message: "Der Zeitpunkt liegt in der Vergangenheit" };
+  createReminder(db(), { title: r.title, note: r.note, dueAt });
+  revalidatePath("/", "layout");
+  return { ok: true, message: `Erinnerung „${r.title}“ gespeichert` };
+}
+
+export async function completeReminderAction(reminderId: number) {
+  completeReminder(db(), id.parse(reminderId));
+  revalidatePath("/", "layout");
+}
+
+export async function deleteReminderAction(reminderId: number) {
+  deleteReminder(db(), id.parse(reminderId));
+  revalidatePath("/", "layout");
+}
+
+const eventSchema = z.object({
+  title: z.string().trim().min(1, "Titel fehlt").max(200, "Maximal 200 Zeichen"),
+  calendar: z.string().min(3, "Bitte einen Kalender wählen"),
+  date: day,
+  allDay: z.boolean(),
+  start: z.union([hhmm, z.literal("")]),
+  end: z.union([hhmm, z.literal("")]),
+  location: z.string().trim().max(200),
+  note: z.string().trim().max(1000),
+  remindBefore: z.coerce.number().refine((n) => (REMIND_BEFORE as readonly number[]).includes(n), "Ungültige Erinnerung"),
+});
+
+export async function createEventAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const parsed = eventSchema.safeParse({
+    title: formData.get("title") ?? "",
+    calendar: formData.get("calendar") ?? "",
+    date: formData.get("date") ?? "",
+    allDay: formData.get("allDay") === "on",
+    start: formData.get("start") ?? "",
+    end: formData.get("end") ?? "",
+    location: formData.get("location") ?? "",
+    note: formData.get("note") ?? "",
+    remindBefore: formData.get("remindBefore") ?? 0,
+  });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0]?.message ?? "Ungültige Eingabe" };
+  const e = parsed.data;
+  if (!e.allDay && !e.start) return { ok: false, message: "Startzeit fehlt (oder „Ganztägig“ wählen)" };
+  if (isDemo()) return { ok: false, message: "Im Demo-Modus wird nichts in Google angelegt" };
+  // Kalender-Auswahl kommt als "<konto>|<kalender-id>"
+  const sep = e.calendar.indexOf("|");
+  const account = e.calendar.slice(0, sep);
+  const calendarId = e.calendar.slice(sep + 1);
+  if (sep < 1 || !calendarId) return { ok: false, message: "Bitte einen Kalender wählen" };
+  const tz = env().APP_TZ;
+  try {
+    const created = await createCalendarEvent(account, calendarId, {
+      title: e.title,
+      day: e.date,
+      start: e.allDay ? null : e.start,
+      end: e.allDay ? null : e.end || null,
+      location: e.location,
+      note: e.note,
+    });
+    setSetting(db(), "lastCalendar", e.calendar);
+    invalidate(db(), "google:");
+    invalidate(db(), "exams:");
+    let reminder = "";
+    if (e.remindBefore > 0) {
+      // ganztägig: Erinnerung relativ zu 09:00 am Tag (1 Tag vorher = 09:00 am Vortag)
+      const startAt = zonedToEpoch(e.date, e.allDay ? "09:00" : e.start, tz);
+      const dueAt = startAt - e.remindBefore * 60_000;
+      if (dueAt > Date.now()) {
+        const end = e.allDay || !e.start ? null : eventEnd(e.date, e.start, e.end || null);
+        createReminder(db(), {
+          title: e.title,
+          note: e.allDay ? "Ganztägiger Termin" : `${e.start}${end ? `–${end.time}` : ""} Uhr${e.location ? ` · ${e.location}` : ""}`,
+          dueAt,
+          url: created.url,
+          source: "termin",
+        });
+        reminder = " · Push-Erinnerung gesetzt";
+      }
+    }
+    revalidatePath("/", "layout");
+    return { ok: true, message: `Termin „${e.title}“ angelegt${reminder}` };
+  } catch (err) {
+    return { ok: false, message: (err as Error).message };
+  }
+}
+
+export type QuickAddData = { calendars: WritableCalendar[]; lastCalendar: string | null; ai: boolean };
+
+/** Lädt das Termin-Formular erst beim Öffnen – „Heute“ soll dafür nicht jedes Mal Google fragen. */
+export async function quickAddDataAction(): Promise<QuickAddData> {
+  if (isDemo()) {
+    return {
+      calendars: [
+        { account: "luis@example.com", id: "primary", name: "Luis", color: "#4285f4", primary: true },
+        { account: "luis@schule.example", id: "primary", name: "Schule", color: "#0b8043", primary: true },
+      ],
+      lastCalendar: null,
+      ai: false,
+    };
+  }
+  const calendars = await writableCalendars().catch(() => []);
+  return { calendars, lastCalendar: getSettings(db()).lastCalendar, ai: Boolean(env().OPENAI_API_KEY) };
+}
+
+export type QuickEntryState = { ok: true; entry: QuickEntry } | { ok: false; message: string } | null;
+
+export async function parseQuickEntryAction(text: string): Promise<QuickEntryState> {
+  const t = z.string().trim().min(2).max(300).safeParse(text);
+  if (!t.success) return { ok: false, message: "Bitte kurz beschreiben, z. B. „morgen 17 Uhr Mathe lernen“" };
+  if (isDemo()) return { ok: false, message: "Schnelleingabe braucht die KI – im Demo-Modus aus" };
+  try {
+    return { ok: true, entry: await parseQuickEntry(db(), t.data, new Date(), env().APP_TZ) };
+  } catch (err) {
+    if (err instanceof BudgetExceededError) return { ok: false, message: err.message };
+    return { ok: false, message: "Konnte die Eingabe nicht verstehen – bitte das Formular nutzen" };
+  }
+}
+
+// ─── Drive aufräumen ───────────────────────────────────────────────────
+
+const driveRef = z.object({ account: z.string().email(), id: z.string().regex(/^[A-Za-z0-9_-]+$/) });
+
+export async function startDriveCleanupAction(): Promise<FormState> {
+  if (isDemo()) return { ok: false, message: "Im Demo-Modus wird Drive nicht angefasst" };
+  try {
+    startDriveCleanup(db());
+    revalidatePath("/drive");
+    return { ok: true, message: "Läuft im Hintergrund – du bekommst eine Mitteilung, wenn es fertig ist" };
+  } catch (err) {
+    return { ok: false, message: (err as Error).message };
+  }
+}
+
+export async function decideDriveAction(account: string, fileId: string, choice: "behalten" | "papierkorb") {
+  const ref = driveRef.parse({ account, id: fileId });
+  const c = z.enum(["behalten", "papierkorb"]).parse(choice);
+  // Demo: nur in LifeOS umsortieren, damit sich die Seite ausprobieren lässt
+  if (isDemo()) markDriveItem(db(), ref.account, ref.id, c);
+  else await decideDriveItem(db(), ref.account, ref.id, c);
+  revalidatePath("/drive");
+}
+
+export async function undoDriveAction(account: string, fileId: string) {
+  const ref = driveRef.parse({ account, id: fileId });
+  if (isDemo()) markDriveItem(db(), ref.account, ref.id, "wiederhergestellt");
+  else await undoDriveItem(db(), ref.account, ref.id);
+  revalidatePath("/drive");
+}
+
+export async function saveDriveProtectedAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const folders = String(formData.get("folders") ?? "")
+    .split("\n")
+    .map((l) => l.trim().replace(/^\/+|\/+$/g, ""))
+    .filter(Boolean);
+  const parsed = z.array(z.string().max(200)).max(50, "Höchstens 50 Ordner").safeParse([...new Set(folders)]);
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
+  setSetting(db(), "driveProtected", parsed.data);
+  revalidatePath("/drive");
+  return { ok: true, message: parsed.data.length ? `${parsed.data.length} geschützte Ordner gespeichert` : "Keine geschützten Ordner" };
 }

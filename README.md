@@ -22,9 +22,11 @@ Runs 24/7 on a 5 € VPS and is reachable **only inside my Tailscale network**.
 | Widget | Source | Notes |
 |---|---|---|
 | 🎓 **School** | WebUntis | Today/next school day, double lessons merged, cancellations & substitutions highlighted |
-| 📅 **Calendar** | Google Calendar | All visible calendars, next 7 days |
+| 📅 **Calendar** | Google Calendar | All visible calendars, next 7 days; create events from the "+" on Today (form or AI free text like "Mathe-Nachhilfe Do 16 Uhr"), optional push 10 min–1 day before |
+| ⏰ **Reminders** | local SQLite + Web Push | One-off reminders with push at the chosen time (3 h catch-up, then "missed"); swipe to complete or delete |
 | 🤖 **Mail assistant** | Gmail + OpenAI (`gpt-6-luna`) | Twice-daily triage of all connected inboxes: labels, archive, trash (recoverable). Hard safety rules + learned sender rules run before the model; uncertain mails wait for a one-tap decision; every action can be undone. Monthly cost cap. One-click "empty inbox" archives everything under a label |
 | ✉️ **Inbox & Drive** | Gmail, Google Drive | Multiple Google accounts, unread per account, latest unread mails, recently edited files |
+| 🗂️ **Drive cleanup** | Google Drive + OpenAI | On demand: exact duplicates, empty and never-edited untitled files go to the Drive trash (restorable for 30 days, one-tap undo); unclear files wait for a keep/trash decision; starred, shared, recently used and protected folders are never touched |
 | 🌦 **Weather** | Open-Meteo | Uses the browser's location (rounded to ~1 km), hourly + 5-day forecast |
 | ✅ **Habits** | local SQLite + Web Push | Check off with optimistic UI, streaks, 16-week heatmap, emoji picker with suggestions, archive/restore/delete, per-habit reminders as push notifications (iPhone home-screen app, iOS 16.4+) |
 | ❤️ **Health** | iPhone Shortcut → Apple Health | Daily automation posts steps, sleep, workouts, energy, resting HR; manual entry; 14/30/90-day charts |
@@ -40,7 +42,8 @@ LifeOS lives on my iPhone home screen, so the UI follows Apple's Human Interface
 
 - **System font & Dynamic Type** – SF Pro on Apple devices; text scales with the iPhone's text-size setting while spacing stays put (`font: -apple-system-body`, spacing in px).
 - **Apple system colors** with their *increased-contrast* variants for small text; every text token is checked against WCAG (≥ 4.5:1) in [`tests/contrast.test.ts`](tests/contrast.test.ts). Light/dark follows the system only.
-- **Navigation:** floating glass tab bar (Heute · Schule · Habits · Gesundheit), large titles that collapse into a glass bar on scroll, settings behind a gear.
+- **Navigation:** floating glass tab bar (Heute · Schule · Habits · Lernen · Gesundheit) – like iOS 26, put your thumb on it and slide: the capsule follows, ticks on every tab and opens the one you let go on. Large titles collapse into a glass bar on scroll, settings behind a gear.
+- **iPad:** same touch UI with the tab bar at the bottom, two columns in portrait and three in landscape; the classic top bar only appears with a mouse or trackpad.
 - **Signature – day tiles:** one big number (next lesson, days until the exam, cancellations, temperature) with context underneath; the same shape counts down every exam.
 - **Today first, customizable:** what matters today is shown large, everything else as compact tiles that expand in place; reorder and switch widgets between *large / tile / off* like home-screen widgets.
 - **Touch:** swipe right to check off a habit or keep a mail, swipe left for archive/delete, taptic feedback on iOS 18+, 44 pt targets, Reduce Motion / Increase Contrast / Reduce Transparency respected.
@@ -85,7 +88,7 @@ flowchart LR
 - **Pull-based deploys.** CI builds and pushes an image to GHCR; a systemd timer on the VPS pulls it. GitHub never needs credentials for the server.
 - **One integration contract.** Every data source implements `Integration<T>` (`fetch`, `mock`, `missingConfig`, `ttlSeconds`). `load()` handles caching, demo mode, "not configured" and error states uniformly, so a broken API only affects its own card.
 - **No native dependencies.** SQLite comes from Node's built-in `node:sqlite`, so the image needs no build toolchain; migrations run via `PRAGMA user_version`.
-- **Secrets stay server-side.** OAuth refresh tokens are encrypted with AES-256-GCM; Google/Spotify scopes are read-only; the health ingest endpoint uses its own bearer token with constant-time comparison.
+- **Secrets stay server-side.** OAuth refresh tokens are encrypted with AES-256-GCM; Spotify is read-only and Google gets only what a feature needs (calendar events, Gmail labels/trash, Drive trash – never permanent deletion); the health ingest endpoint uses its own bearer token with constant-time comparison.
 - **AI with guardrails.** The mail assistant only sends sender, subject and Gmail's preview to the model, and its suggestions pass through deterministic rules (`src/lib/mail/policy.ts`): protected categories are never removed, deletion needs high confidence, nothing is ever permanently deleted. An end-to-end test runs the whole flow against mocked Gmail/OpenAI APIs and asserts exactly which calls happen.
 - **Cache Components / PPR.** The static shell renders instantly; each widget streams in behind its own `<Suspense>` boundary.
 

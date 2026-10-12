@@ -4,13 +4,22 @@ import { addDays, today } from "@/lib/time";
 import { getToken, listProviders, postForm, renameToken, validAccessToken } from "@/lib/tokens";
 import { fetchJson, type Integration } from "./core";
 
-/** gmail.modify statt gmail.readonly: nötig, damit die Mail-Sortierung Labels setzen, archivieren und in den Papierkorb legen kann. */
-export const GOOGLE_SCOPES = [
-  "https://www.googleapis.com/auth/calendar.readonly",
-  "https://www.googleapis.com/auth/gmail.modify",
-  "https://www.googleapis.com/auth/drive.metadata.readonly",
-];
+/**
+ * gmail.modify statt gmail.readonly: nötig, damit die Mail-Sortierung Labels setzen, archivieren und in den Papierkorb legen kann.
+ * calendar.events: Termine aus LifeOS anlegen. drive (statt drive.metadata.readonly): Drive aufräumen legt Dateien in den
+ * Papierkorb – das geht für nicht von LifeOS angelegte Dateien nur mit dem vollen Scope. Endgültig gelöscht wird nie.
+ */
 export const GMAIL_MODIFY = "https://www.googleapis.com/auth/gmail.modify";
+export const CALENDAR_WRITE = "https://www.googleapis.com/auth/calendar.events";
+export const DRIVE_WRITE = "https://www.googleapis.com/auth/drive";
+export const GOOGLE_SCOPES = ["https://www.googleapis.com/auth/calendar.readonly", CALENDAR_WRITE, GMAIL_MODIFY, DRIVE_WRITE];
+
+/** Funktionen, die ein älteres Konto erst nach erneutem Verbinden kann (für die Einstellungen). */
+export const SCOPE_FEATURES = [
+  { scope: GMAIL_MODIFY, label: "Mail-Sortierung" },
+  { scope: CALENDAR_WRITE, label: "Termine anlegen" },
+  { scope: DRIVE_WRITE, label: "Drive aufräumen" },
+] as const;
 
 export type CalendarEvent = {
   id: string;
@@ -100,6 +109,10 @@ export function hasScope(email: string, scope: string): boolean {
   return (getToken(googleKey(email))?.scope ?? "").split(" ").includes(scope);
 }
 
+export function missingFeatures(email: string): string[] {
+  return SCOPE_FEATURES.filter((f) => !hasScope(email, f.scope)).map((f) => f.label);
+}
+
 async function api<T>(url: string, token: string): Promise<T> {
   return fetchJson<T>(url, { headers: { Authorization: `Bearer ${token}` } });
 }
@@ -150,6 +163,80 @@ export function sortEvents(events: CalendarEvent[]): CalendarEvent[] {
   // Ganztägige Termine ("2026-10-12") vor Terminen mit Uhrzeit am selben Tag
   const key = (e: CalendarEvent) => (e.allDay ? `${e.start}T00:00:00` : new Date(e.start).toISOString());
   return [...events].sort((a, b) => key(a).localeCompare(key(b)));
+}
+
+export type WritableCalendar = { account: string; id: string; name: string; color: string | null; primary: boolean };
+
+/** Kalender, in die LifeOS schreiben darf – über alle Konten mit `calendar.events`. */
+export async function writableCalendars(): Promise<WritableCalendar[]> {
+  const accounts = (await googleAccounts()).filter((a) => hasScope(a, CALENDAR_WRITE));
+  const lists = await Promise.allSettled(
+    accounts.map(async (account) => {
+      const token = await googleAccessToken(googleKey(account));
+      const list = await api<{ items: { id: string; summary: string; summaryOverride?: string; backgroundColor?: string; primary?: boolean }[] }>(
+        "https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=writer",
+        token,
+      );
+      return list.items.map((c) => ({
+        account,
+        id: c.id,
+        name: c.summaryOverride ?? c.summary,
+        color: c.backgroundColor ?? null,
+        primary: Boolean(c.primary),
+      }));
+    }),
+  );
+  return lists.flatMap((r) => (r.status === "fulfilled" ? r.value : []));
+}
+
+export type NewEvent = {
+  title: string;
+  day: string; // YYYY-MM-DD
+  start: string | null; // HH:MM, null = ganztägig
+  end: string | null; // HH:MM
+  endDay?: string | null; // bei ganztägigen Terminen über mehrere Tage (einschließlich)
+  location?: string | null;
+  note?: string | null;
+};
+
+/** Ende eines Termins mit Uhrzeit: fehlt es oder ist es gleich dem Start, dauert er 1 Stunde; liegt es davor, endet er am Folgetag. */
+export function eventEnd(day: string, start: string, end: string | null): { day: string; time: string } {
+  if (end && end > start) return { day, time: end };
+  if (end && end < start) return { day: addDays(day, 1), time: end };
+  const m = Number(start.slice(0, 2)) * 60 + Number(start.slice(3, 5)) + 60;
+  const time = `${String(Math.floor(m / 60) % 24).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  return { day: m >= 24 * 60 ? addDays(day, 1) : day, time };
+}
+
+/** Request-Body für die Calendar API. Ganztägig: `date` mit exklusivem Ende; mit Uhrzeit: Wanduhrzeit + Zeitzone. */
+export function eventBody(e: NewEvent, tz: string) {
+  let time;
+  if (e.start) {
+    const end = eventEnd(e.day, e.start, e.end);
+    time = { start: { dateTime: `${e.day}T${e.start}:00`, timeZone: tz }, end: { dateTime: `${end.day}T${end.time}:00`, timeZone: tz } };
+  } else {
+    time = { start: { date: e.day }, end: { date: addDays(e.endDay && e.endDay > e.day ? e.endDay : e.day, 1) } };
+  }
+  return {
+    summary: e.title.trim(),
+    ...(e.location?.trim() ? { location: e.location.trim() } : {}),
+    ...(e.note?.trim() ? { description: e.note.trim() } : {}),
+    ...time,
+  };
+}
+
+export async function createCalendarEvent(account: string, calendarId: string, e: NewEvent): Promise<{ id: string; url: string | null }> {
+  if (!hasScope(account, CALENDAR_WRITE)) throw new Error(`${account} neu verbinden, um Termine anzulegen`);
+  const token = await googleAccessToken(googleKey(account));
+  const res = await fetchJson<{ id: string; htmlLink?: string }>(
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify(eventBody(e, env().APP_TZ)),
+    },
+  );
+  return { id: res.id, url: res.htmlLink ?? null };
 }
 
 function header(headers: { name: string; value: string }[], name: string): string {

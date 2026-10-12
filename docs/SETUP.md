@@ -66,7 +66,7 @@ Nach jeder Änderung: `sudo docker compose up -d --no-build` (startet den Contai
 5. Client-ID und Client-Secret in die `.env`, Container neu starten.
 6. Im Dashboard: **Einstellungen → Mit Google verbinden**.
 
-Benötigte Berechtigungen: `calendar.readonly`, `drive.metadata.readonly` und `gmail.modify` (für den Mail-Assistenten: Labels setzen, archivieren, in den Papierkorb legen). LifeOS sendet keine Mails und löscht nie endgültig.
+Benötigte Berechtigungen: `calendar.readonly` + `calendar.events` (Termine anlegen), `gmail.modify` (Mail-Assistent: Labels setzen, archivieren, in den Papierkorb legen) und `drive` (Drive aufräumen: Dateien in den Papierkorb legen und wiederherstellen). LifeOS sendet keine Mails und löscht nie endgültig. Fehlen einem schon verbundenen Konto neue Rechte, zeigt *Einstellungen → Google* „Neu verbinden für …“.
 
 ---
 

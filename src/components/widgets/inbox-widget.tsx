@@ -1,4 +1,5 @@
 import { File, FileSpreadsheet, FileText, Presentation } from "lucide-react";
+import Link from "next/link";
 import { loadGoogle } from "@/integrations/loaders";
 import { relativeTime } from "@/lib/time";
 import { RefreshButton } from "../refresh-button";
@@ -74,7 +75,12 @@ export async function InboxWidget({ className }: { className?: string }) {
               ) : null}
               {drive.length ? (
                 <div className="border-t border-border pt-3">
-                  <h3 className="mb-1.5 text-footnote font-semibold text-muted-foreground">Drive · zuletzt bearbeitet</h3>
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <h3 className="text-footnote font-semibold text-muted-foreground">Drive · zuletzt bearbeitet</h3>
+                    <Link href="/drive" className="text-footnote font-semibold text-tint-text active:opacity-60">
+                      Aufräumen
+                    </Link>
+                  </div>
                   <ul className="space-y-1.5 text-subhead">
                     {drive.slice(0, 3).map((f) => {
                       const Icon = fileIcon(f.mimeType);

@@ -3,6 +3,8 @@
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
+/* Laptop/Desktop mit Maus oder Trackpad. iPad und iPhone (Touch) behalten die App-Oberfläche mit Tab-Leiste unten. */
+@custom-variant desktop (@media (min-width: 640px) and (hover: hover) and (pointer: fine));
 
 @theme inline {
   --color-background: var(--background);

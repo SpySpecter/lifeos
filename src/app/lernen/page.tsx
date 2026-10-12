@@ -152,8 +152,8 @@ async function FlashcardsCard() {
 export default function LearnPage() {
   return (
     <div className="space-y-6">
-      <PageHeader title="Lernen" trailing={<SettingsLink className="sm:hidden" />} />
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
+      <PageHeader title="Lernen" trailing={<SettingsLink className="desktop:hidden" />} />
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:items-start">
         <div className="space-y-6">
           <Suspense fallback={<WidgetSkeleton lines={4} />}>
             <TodayCard />

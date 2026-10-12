@@ -13,6 +13,9 @@ const shots = [
   { name: "mobile", path: "/", theme: "dark", viewport: { width: 393, height: 1400 }, mobile: true },
   { name: "mobile-light", path: "/", theme: "light", viewport: { width: 393, height: 1400 }, mobile: true },
   { name: "mobile-school", path: "/schule", theme: "light", viewport: { width: 393, height: 1400 }, mobile: true },
+  // iPad (A16): Touch statt Maus → Tab-Leiste unten, 2 Spalten hochkant, 3 quer
+  { name: "ipad-portrait", path: "/", theme: "dark", viewport: { width: 820, height: 1180 }, mobile: true },
+  { name: "ipad-landscape", path: "/", theme: "light", viewport: { width: 1180, height: 820 }, mobile: true },
 ];
 
 const browser = await chromium.launch();
@@ -21,6 +24,7 @@ for (const s of shots) {
     viewport: s.viewport,
     deviceScaleFactor: 2,
     isMobile: Boolean(s.mobile),
+    hasTouch: Boolean(s.mobile),
     colorScheme: s.theme,
     locale: "de-DE",
     timezoneId: "Europe/Berlin",

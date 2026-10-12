@@ -165,6 +165,50 @@ const MIGRATIONS: string[] = [
     created_at  INTEGER NOT NULL
   );
   `,
+  `
+  -- einmalige Erinnerungen (auch vor Kalender-Terminen), verschickt von der Minuten-Schleife
+  CREATE TABLE reminders (
+    id         INTEGER PRIMARY KEY,
+    title      TEXT NOT NULL,
+    note       TEXT,
+    due_at     INTEGER NOT NULL,
+    url        TEXT,
+    source     TEXT NOT NULL,             -- 'manuell' | 'termin'
+    status     TEXT NOT NULL DEFAULT 'offen', -- 'offen' | 'gesendet' | 'verpasst' | 'erledigt'
+    created_at INTEGER NOT NULL,
+    sent_at    INTEGER
+  );
+  CREATE INDEX reminders_due ON reminders (status, due_at);
+  -- Drive aufräumen: Bewertung je Datei, damit spätere Läufe Bewertetes überspringen und alles rückgängig bleibt
+  CREATE TABLE drive_items (
+    account      TEXT NOT NULL,
+    id           TEXT NOT NULL,
+    name         TEXT NOT NULL,
+    mime         TEXT NOT NULL,
+    path         TEXT NOT NULL,
+    size         INTEGER,
+    modified_at  INTEGER NOT NULL,
+    viewed_at    INTEGER,
+    url          TEXT,
+    verdict      TEXT NOT NULL,  -- 'relevant' | 'unklar' | 'unnoetig'
+    confidence   REAL,
+    reason       TEXT NOT NULL,
+    source       TEXT NOT NULL,  -- 'regel' | 'ki'
+    status       TEXT NOT NULL,  -- 'behalten' | 'offen' | 'papierkorb' | 'wiederhergestellt'
+    processed_at INTEGER NOT NULL,
+    decided_at   INTEGER,
+    PRIMARY KEY (account, id)
+  );
+  CREATE INDEX drive_items_status ON drive_items (status, processed_at);
+  CREATE TABLE drive_runs (
+    id          INTEGER PRIMARY KEY,
+    started_at  INTEGER NOT NULL,
+    finished_at INTEGER,
+    progress    TEXT,
+    summary     TEXT,
+    error       TEXT
+  );
+  `,
 ];
 
 export type DB = DatabaseSync;

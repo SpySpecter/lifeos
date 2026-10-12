@@ -63,6 +63,36 @@ function seedStudy(db: DB, day: string): void {
   db.prepare("INSERT INTO flashcard_sets (material_id, title, content, created_at) VALUES (?, ?, ?, ?)").run(material, "Sortieralgorithmen", DEMO_CARDS, now);
 }
 
+/** Drive aufräumen: ein abgeschlossener Lauf mit offenen Fragen und Dateien im Papierkorb. */
+function seedDrive(db: DB): void {
+  db.exec("DELETE FROM drive_items; DELETE FROM drive_runs;");
+  const now = Date.now();
+  const DAY = 86_400_000;
+  const insert = db.prepare(
+    `INSERT INTO drive_items (account, id, name, mime, path, size, modified_at, viewed_at, url, verdict, confidence, reason, source, status, processed_at)
+     VALUES ('luis@example.com', ?, ?, ?, ?, ?, ?, NULL, 'https://drive.google.com', ?, ?, ?, ?, ?, ?)`,
+  );
+  const rows: [string, string, string, string, number | null, number, string, number | null, string, string, string][] = [
+    ["d1", "Referat Notizen alt.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "Schule/10. Klasse", 48_000, 620, "unklar", 0.55, "Alte Schulnotizen, evtl. noch nützlich", "ki", "offen"],
+    ["d2", "IMG_20240713_181502.jpg", "image/jpeg", "", 3_400_000, 450, "unklar", 0.92, "Foto – am Namen nicht beurteilbar", "ki", "offen"],
+    ["d3", "Kopie von Stundenplan.xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "", 12_000, 800, "unklar", 0.7, "Veralteter Stundenplan?", "ki", "offen"],
+    ["d4", "export (3).csv", "text/csv", "Downloads", 2_100, 300, "unklar", 0.8, "Temporärer Export", "ki", "offen"],
+    ["t1", "Präsentation Bio.pdf", "application/pdf", "Schule/Bio", 1_200_000, 500, "unnoetig", null, "Doppelt – Original „Präsentation Bio.pdf“ in „Schule“", "regel", "papierkorb"],
+    ["t2", "Unbenanntes Dokument", "application/vnd.google-apps.document", "", null, 700, "unnoetig", null, "Unbenannt und nie bearbeitet", "regel", "papierkorb"],
+    ["t3", "test123.txt", "text/plain", "", 0, 900, "unnoetig", null, "Leere Datei (0 Byte)", "regel", "papierkorb"],
+    ["t4", "minecraft-installer-1.12.exe", "application/x-msdownload", "Downloads", 2_800_000, 1100, "unnoetig", 0.96, "Alte Installationsdatei", "ki", "papierkorb"],
+  ];
+  for (const [id, name, mime, path, size, ageDays, verdict, confidence, reason, source, status] of rows) {
+    insert.run(id, name, mime, path, size, now - ageDays * DAY, verdict, confidence, reason, source, status, now - 2 * 3600_000);
+  }
+  const summary = { accounts: 1, scanned: 1243, skipped: 0, relevant: 1231, unklar: 4, trashed: 4, notes: [] };
+  db.prepare("INSERT INTO drive_runs (started_at, finished_at, summary) VALUES (?, ?, ?)").run(
+    now - 2 * 3600_000 - 240_000,
+    now - 2 * 3600_000,
+    JSON.stringify(summary),
+  );
+}
+
 const DEMO_HABITS = [
   { name: "Lesen (20 min)", emoji: "📚", rate: 0.75 },
   { name: "Sport", emoji: "🏃", rate: 0.6 },
@@ -95,6 +125,7 @@ export function seedDemoData(db: DB, day: string = today()): void {
     });
 
     seedStudy(db, day);
+    seedDrive(db);
 
     for (const d of days.slice(-60)) {
       if (d === day) {
