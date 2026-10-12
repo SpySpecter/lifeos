@@ -6,7 +6,8 @@ import { PlanActions, StudySessionList } from "@/components/study";
 import { WidgetCard, WidgetSkeleton } from "@/components/widget-card";
 import { currentDay } from "@/integrations/loaders";
 import { db } from "@/lib/db";
-import { examCountdown, getMaterials, getPlan, type StudySession } from "@/lib/study";
+import { focusMinutesFor } from "@/lib/focus";
+import { examCountdown, formatMinutes, getMaterials, getPlan, type StudySession } from "@/lib/study";
 import { formatDayLong } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -42,7 +43,7 @@ async function PlanContent({ searchParams }: { searchParams: Promise<Record<stri
         <div className="space-y-6">
           {byWeek(plan.sessions).map((w) => (
             <WidgetCard key={w.label} title={w.label}>
-              <StudySessionList sessions={w.sessions} showDay />
+              <StudySessionList sessions={w.sessions} showDay subject={plan.title} />
             </WidgetCard>
           ))}
         </div>
@@ -53,6 +54,7 @@ async function PlanContent({ searchParams }: { searchParams: Promise<Record<stri
               ["Kurs / Thema", plan.subject ?? "–"],
               ["Fortschritt", `${plan.done} von ${plan.total} Einheiten`],
               ["Noch offen", `${minutes} Min.`],
+              ["Fokuszeit", `${formatMinutes(focusMinutesFor(db(), plan.title, plan.createdAt))} gemessen`],
               ["Material", materials.length ? materials.join(", ") : "keins"],
             ].map(([label, value]) => (
               <div key={String(label)} className="flex gap-3 py-2.5">

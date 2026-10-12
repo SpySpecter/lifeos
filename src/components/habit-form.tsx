@@ -3,6 +3,7 @@
 import { Archive, BellRing, Pencil, Plus, Trash2 } from "lucide-react";
 import { useActionState, useEffect, useOptimistic, useState, useTransition, type ReactNode } from "react";
 import { addHabitAction, archiveHabitAction, deleteHabitAction, reorderHabitsAction, updateHabitAction, type FormState } from "@/app/actions";
+import { rhythmLabel } from "@/lib/habits";
 import { haptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 import { HabitFields, type HabitDraft } from "./habit-fields";
@@ -89,11 +90,12 @@ export function HabitManageRow({ habit, rate, handle }: { habit: HabitDraft & { 
           </span>
           <span className="min-w-0 flex-1">
             <span className="block truncate text-body">{habit.name}</span>
-            <span className="flex items-center gap-2 text-footnote text-muted-foreground tabular-nums">
+            <span className="flex items-center gap-2 text-footnote whitespace-nowrap text-muted-foreground tabular-nums">
               <span className="h-1.5 w-16 rounded-full bg-muted" aria-hidden>
                 <span className="block h-1.5 rounded-full bg-good" style={{ width: `${rate * 100}%` }} />
               </span>
               {Math.round(rate * 100)} %
+              {habit.cadence !== "daily" ? <span className="truncate">· {rhythmLabel(habit)}</span> : null}
               {habit.remindAt ? (
                 <span className="flex items-center gap-1">
                   · <BellRing className="size-3.5" aria-hidden />
@@ -144,7 +146,7 @@ export function HabitManageList({ habits }: { habits: ManagedHabit[] }) {
         })
       }
       renderRow={(h, handle) => (
-        <HabitManageRow habit={{ id: h.id, name: h.name, emoji: h.emoji, remindAt: h.remindAt }} rate={h.rate} handle={handle} />
+        <HabitManageRow habit={{ id: h.id, name: h.name, emoji: h.emoji, remindAt: h.remindAt, cadence: h.cadence, intervalDays: h.intervalDays }} rate={h.rate} handle={handle} />
       )}
     />
   );

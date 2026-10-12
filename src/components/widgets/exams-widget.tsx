@@ -1,6 +1,7 @@
 import type { Exam } from "@/integrations/exams";
 import { daysUntil } from "@/integrations/exams";
-import { currentDay, loadExams } from "@/integrations/loaders";
+import { currentDay, loadExams, loadGrades } from "@/integrations/loaders";
+import { examHint } from "@/lib/grades";
 import { cn } from "@/lib/utils";
 import { RefreshButton } from "../refresh-button";
 import { ResultView, WidgetCard } from "../widget-card";
@@ -41,7 +42,7 @@ function Countdown({ days }: { days: number }) {
   );
 }
 
-function ExamRow({ exam, days }: { exam: Exam; days: number }) {
+function ExamRow({ exam, days, hint }: { exam: Exam; days: number; hint: string | null }) {
   const body = (
     <div className="flex items-center gap-3 py-2.5">
       <Countdown days={days} />
@@ -54,6 +55,7 @@ function ExamRow({ exam, days }: { exam: Exam; days: number }) {
           {exam.kind} · {dateLabel(exam)}
           {exam.topic ? ` · ${exam.topic}` : ""}
         </p>
+        {hint ? <p className="truncate text-footnote font-medium text-tint-text">🎯 {hint}</p> : null}
       </div>
     </div>
   );
@@ -79,7 +81,7 @@ export async function ExamsWidget({
   limit?: number;
   href?: string | null;
 }) {
-  const [result, day] = await Promise.all([loadExams(), currentDay()]);
+  const [result, day, grades] = await Promise.all([loadExams(), currentDay(), loadGrades()]);
   return (
     <WidgetCard title="Klausuren & Tests" className={className} href={href ?? undefined} action={<RefreshButton integration="exams" />}>
       <ResultView result={result} integration="exams">
@@ -87,7 +89,7 @@ export async function ExamsWidget({
           list.length ? (
             <ul className="-my-2.5 ios-inset-rows [--inset:68px]">
               {list.slice(0, limit).map((x) => (
-                <ExamRow key={x.id} exam={x} days={daysUntil(x.day, day)} />
+                <ExamRow key={x.id} exam={x} days={daysUntil(x.day, day)} hint={examHint(grades.courses, grades.semester, x)} />
               ))}
             </ul>
           ) : (

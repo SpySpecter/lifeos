@@ -3,14 +3,22 @@
 import { BellRing, X } from "lucide-react";
 import { useId, useState } from "react";
 import { EMOJI_GROUPS, isSingleEmoji, suggestEmoji } from "@/lib/emoji";
+import type { Cadence } from "@/lib/habits";
 import { cn } from "@/lib/utils";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 
-export type HabitDraft = { name: string; emoji: string; remindAt: string | null };
+export type HabitDraft = { name: string; emoji: string; remindAt: string | null; cadence: Cadence; intervalDays: number | null };
+
+const CADENCE_OPTIONS: { value: Cadence; label: string }[] = [
+  { value: "daily", label: "Täglich" },
+  { value: "weekly", label: "Wöchentlich" },
+  { value: "monthly", label: "Monatlich" },
+  { value: "interval", label: "Alle … Tage" },
+];
 
 /**
- * Emoji, Name und Erinnerungszeit – gemeinsam für „Neu“ und „Bearbeiten“.
+ * Emoji, Name, Takt und Erinnerungszeit – gemeinsam für „Neu“ und „Bearbeiten“.
  * Solange kein Emoji von Hand gewählt wurde, schlägt der Name eines vor („Wasser trinken“ → 💧).
  */
 export function HabitFields({ initial, autoFocus = false }: { initial?: HabitDraft; autoFocus?: boolean }) {
@@ -18,6 +26,7 @@ export function HabitFields({ initial, autoFocus = false }: { initial?: HabitDra
   const [name, setName] = useState(initial?.name ?? "");
   const [picked, setPicked] = useState<string | null>(initial?.emoji ?? null);
   const [remindAt, setRemindAt] = useState(initial?.remindAt ?? "");
+  const [cadence, setCadence] = useState<Cadence>(initial?.cadence ?? "daily");
   const [open, setOpen] = useState(false);
   const [group, setGroup] = useState(0);
   const [custom, setCustom] = useState("");
@@ -61,6 +70,37 @@ export function HabitFields({ initial, autoFocus = false }: { initial?: HabitDra
           required
           autoFocus={autoFocus}
         />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor={`${ids}-cadence`}>Wie oft</Label>
+        <div className="flex items-center gap-2">
+          <select
+            id={`${ids}-cadence`}
+            name="cadence"
+            value={cadence}
+            onChange={(e) => setCadence(e.target.value as Cadence)}
+            className="min-h-11 rounded-[10px] bg-muted px-3 text-body outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          >
+            {CADENCE_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          {cadence === "interval" ? (
+            <Input
+              aria-label="Abstand in Tagen"
+              name="intervalDays"
+              type="number"
+              inputMode="numeric"
+              min={2}
+              max={365}
+              defaultValue={initial?.intervalDays ?? 3}
+              required
+              className="w-20 tabular-nums"
+            />
+          ) : null}
+        </div>
       </div>
       <div className="space-y-1.5">
         <Label htmlFor={`${ids}-time`}>Erinnerung</Label>

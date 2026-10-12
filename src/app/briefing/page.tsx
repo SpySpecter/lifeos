@@ -13,6 +13,8 @@ import { daysUntil } from "@/integrations/exams";
 import { sortEvents } from "@/integrations/google";
 import { briefingTime, getOrCreateBriefing, type Briefing } from "@/lib/briefing";
 import { db } from "@/lib/db";
+import { cardWindow } from "@/integrations/loaders";
+import { dueCount } from "@/lib/flashcards";
 import { env } from "@/lib/env";
 import { listHabits } from "@/lib/habits";
 import { todaysSessions } from "@/lib/study";
@@ -135,7 +137,7 @@ function EventsCard({ events, tz }: { events: NonNullable<Briefing["events"]>; t
 function HabitsCard({ day }: { day: string }) {
   const habits = listHabits(db(), day, 1);
   if (!habits.length) return null;
-  const open = habits.filter((h) => !h.doneToday);
+  const open = habits.filter((h) => !h.done);
   return (
     <WidgetCard title="Gewohnheiten" href="/habits" hrefLabel="Abhaken">
       {open.length ? (
@@ -144,7 +146,8 @@ function HabitsCard({ day }: { day: string }) {
             <li key={h.id} className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-subhead">
               <span aria-hidden>{h.emoji}</span>
               {h.name}
-              {h.streak > 1 ? <span className="text-footnote text-muted-foreground tabular-nums">· {h.streak} Tage</span> : null}
+              {h.status ? <span className="text-footnote text-muted-foreground">· {h.status}</span> : null}
+              {h.streak > 1 ? <span className="text-footnote text-muted-foreground tabular-nums">· {h.streak} {h.streakUnit}</span> : null}
             </li>
           ))}
         </ul>
@@ -156,13 +159,18 @@ function HabitsCard({ day }: { day: string }) {
 }
 
 /** Live aus den Lernplänen – nicht Teil des gespeicherten Briefings, damit Abhaken sofort sichtbar ist. */
-function StudyCard({ day }: { day: string }) {
+async function StudyCard({ day }: { day: string }) {
   const sessions = todaysSessions(db(), day);
-  if (!sessions.length) return null;
+  const { now, end } = await cardWindow();
+  const cards = dueCount(db(), now, end);
+  if (!sessions.length && !cards) return null;
   const open = sessions.filter((s) => !s.done).reduce((n, s) => n + s.minutes, 0);
+  const footer = [sessions.length ? (open ? `${open} Min. offen` : "Alles geschafft. 🎉") : null, cards ? `${cards} ${cards === 1 ? "Karte" : "Karten"} fällig` : null]
+    .filter(Boolean)
+    .join(" · ");
   return (
-    <WidgetCard title="Lernen heute" href="/lernen" hrefLabel="Pläne" footer={open ? `${open} Min. offen` : "Alles geschafft. 🎉"}>
-      <StudySessionList sessions={sessions} showPlan />
+    <WidgetCard title="Lernen heute" href={sessions.length ? "/lernen" : "/lernen/wiederholen"} hrefLabel={sessions.length ? "Pläne" : "Wiederholen"} footer={footer}>
+      {sessions.length ? <StudySessionList sessions={sessions} showPlan /> : <p className="py-1 text-subhead">Keine Lerneinheit geplant – Zeit für die Karteikarten.</p>}
     </WidgetCard>
   );
 }

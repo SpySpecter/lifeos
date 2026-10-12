@@ -1,4 +1,6 @@
 import type { DB } from "./db";
+import { addCards, createDeck, reviewCard } from "./flashcards";
+import { weekStart } from "./habits";
 import { upsertHealth } from "./health";
 import { addDays, lastDays, today } from "./time";
 
@@ -28,15 +30,25 @@ Die Liste wird halbiert, beide Hälften rekursiv sortiert und anschließend zusa
 ## Stabilität
 Ein Verfahren ist stabil, wenn gleiche Schlüssel ihre ursprüngliche Reihenfolge behalten.`;
 
-const DEMO_CARDS = `# Sortieralgorithmen
-Laufzeit von Bubblesort im schlechtesten Fall? == O(n²)
-Wie teilt Quicksort die Liste auf? == Über ein Pivot-Element in kleinere und größere Elemente
-Was bedeutet „stabil“ bei Sortierverfahren? == Gleiche Schlüssel behalten ihre ursprüngliche Reihenfolge
-Welches Verfahren ist immer O(n log n) und stabil? == Mergesort`;
+const DEMO_CARDS = [
+  { front: "Laufzeit von Bubblesort im schlechtesten Fall?", back: "O(n²)" },
+  { front: "Wie teilt Quicksort die Liste auf?", back: "Über ein Pivot-Element in kleinere und größere Elemente" },
+  { front: "Was bedeutet „stabil“ bei Sortierverfahren?", back: "Gleiche Schlüssel behalten ihre ursprüngliche Reihenfolge" },
+  { front: "Welches Verfahren ist immer O(n log n) und stabil?", back: "Mergesort" },
+  { front: "Was macht Selectionsort in jedem Schritt?", back: "Das kleinste Element des unsortierten Rests suchen und nach vorne tauschen" },
+  { front: "Laufzeit von Quicksort im Mittel?", back: "O(n log n)" },
+];
+
+const DEMO_VOCAB = [
+  { front: "to deteriorate", back: "sich verschlechtern" },
+  { front: "ambiguous", back: "mehrdeutig" },
+  { front: "to undermine", back: "untergraben" },
+  { front: "inevitable", back: "unvermeidlich" },
+];
 
 /** Lernplan für die Demo: Informatik-Klausur in 9 Tagen, vorgestern erledigt, gestern liegengeblieben. */
 function seedStudy(db: DB, day: string): void {
-  db.exec("DELETE FROM flashcard_sets; DELETE FROM study_sessions; DELETE FROM study_plans; DELETE FROM study_materials;");
+  db.exec("DELETE FROM focus_sessions; DELETE FROM flashcard_decks; DELETE FROM study_sessions; DELETE FROM study_plans; DELETE FROM study_materials;");
   const now = Date.now();
   const material = Number(
     db
@@ -60,7 +72,46 @@ function seedStudy(db: DB, day: string): void {
   ];
   const insert = db.prepare("INSERT INTO study_sessions (plan_id, day, topic, tasks, minutes, done) VALUES (?, ?, ?, ?, ?, ?)");
   topics.forEach(([topic, tasks], i) => insert.run(plan, addDays(day, i - 2), topic, JSON.stringify(tasks), i === 7 ? 60 : 45, i === 0 ? 1 : 0));
-  db.prepare("INSERT INTO flashcard_sets (material_id, title, content, created_at) VALUES (?, ?, ?, ?)").run(material, "Sortieralgorithmen", DEMO_CARDS, now);
+  const deck = createDeck(db, { title: "Sortieralgorithmen", subject: "Informatik", materialId: material }, now);
+  addCards(db, deck, DEMO_CARDS, now);
+  // ein Teil schon gelernt: zwei fällig, zwei erst in ein paar Tagen
+  const ids = (db.prepare("SELECT id FROM flashcards WHERE deck_id = ? ORDER BY id").all(deck) as { id: number }[]).map((r) => r.id);
+  for (const [i, cardId] of ids.slice(0, 4).entries()) reviewCard(db, cardId, 4, now - (i < 2 ? 12 : 1) * 86_400_000);
+  // gemessene Lernzeit für „Plan gegen Ist“: heute früh schon zwei Fokus-Sitzungen
+  const focus = db.prepare("INSERT INTO focus_sessions (subject, kind, started_at, ended_at, minutes) VALUES (?, ?, ?, ?, ?)");
+  focus.run("Informatik", "pomodoro", now - 3 * 3600_000, now - 3 * 3600_000 + 55 * 60_000, 50);
+  focus.run("Englisch", "frei", now - 90 * 60_000, now - 70 * 60_000, 20);
+  const vocab = createDeck(db, { title: "Englisch Vokabeln", subject: "Englisch" }, now);
+  addCards(db, vocab, DEMO_VOCAB, now);
+}
+
+/** Noten: Q1 abgeschlossen (Zeugnis), Q2 läuft – Mathe-LK mit Ziel 12. */
+function seedGrades(db: DB, day: string): void {
+  db.exec("DELETE FROM grade_courses;");
+  const courses: [string, "LK" | "GK" | "SK", number | null, number | null, number, [string, number][]][] = [
+    // Fach, Kursart, Prüfungsfach, Ziel, Q1-Zeugnis, Noten in Q2
+    ["Mathematik", "LK", 1, 12, 11, [["klausur", 10], ["muendlich", 13]]],
+    ["Informatik", "LK", 2, 14, 14, [["klausur", 14], ["muendlich", 15], ["sonstig", 13]]],
+    ["Deutsch", "GK", 3, null, 9, [["muendlich", 10]]],
+    ["Englisch", "GK", 4, null, 10, [["klausur", 11]]],
+    ["Geschichte", "GK", 5, null, 8, [["muendlich", 9]]],
+    ["Physik", "GK", null, null, 7, [["klausur", 6], ["muendlich", 8]]],
+    ["Seminarkurs", "SK", null, null, 12, []],
+  ];
+  courses.forEach(([subject, kind, slot, target, q1, q2], pos) => {
+    const id = Number(
+      db
+        .prepare("INSERT INTO grade_courses (subject, kind, exam_slot, target, position, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(subject, kind, slot, target, pos, Date.now()).lastInsertRowid,
+    );
+    db.prepare("INSERT INTO grade_overrides (course_id, semester, points) VALUES (?, 'Q1', ?)").run(id, q1);
+    q2.forEach(([kindOf, points], i) =>
+      db
+        .prepare("INSERT INTO grades (course_id, semester, kind, points, label, day, created_at) VALUES (?, 'Q2', ?, ?, ?, ?, ?)")
+        .run(id, kindOf, points, kindOf === "klausur" ? "1. Klausur" : null, addDays(day, -20 + i * 6), Date.now()),
+    );
+  });
+  db.prepare("INSERT INTO settings (key, value) VALUES ('gradeSemester', '\"Q2\"') ON CONFLICT(key) DO UPDATE SET value = excluded.value").run();
 }
 
 /** Drive aufräumen: ein abgeschlossener Lauf mit offenen Fragen und Dateien im Papierkorb. */
@@ -93,12 +144,14 @@ function seedDrive(db: DB): void {
   );
 }
 
-const DEMO_HABITS = [
+const DEMO_HABITS: { name: string; emoji: string; rate: number; cadence?: "weekly" | "interval"; intervalDays?: number }[] = [
   { name: "Lesen (20 min)", emoji: "📚", rate: 0.75 },
   { name: "Sport", emoji: "🏃", rate: 0.6 },
   { name: "Vokabeln", emoji: "🗣️", rate: 0.8 },
   { name: "Kein Handy nach 22 Uhr", emoji: "🌙", rate: 0.55 },
   { name: "2 Liter Wasser", emoji: "💧", rate: 0.85 },
+  { name: "Zimmer aufräumen", emoji: "🧹", rate: 0.85, cadence: "weekly" },
+  { name: "Pflanzen gießen", emoji: "🪴", rate: 1, cadence: "interval", intervalDays: 3 },
 ];
 
 /** Füllt die Demo-Datenbank mit plausiblen Daten der letzten 120 Tage (nur wenn sie leer ist). */
@@ -114,10 +167,20 @@ export function seedDemoData(db: DB, day: string = today()): void {
     db.exec("DELETE FROM habit_checks; DELETE FROM habits; DELETE FROM health;");
     DEMO_HABITS.forEach((h, pos) => {
       const res = db
-        .prepare("INSERT INTO habits (name, emoji, position, created_at) VALUES (?, ?, ?, ?)")
-        .run(h.name, h.emoji, pos, Date.now());
+        .prepare("INSERT INTO habits (name, emoji, cadence, interval_days, position, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(h.name, h.emoji, h.cadence ?? "daily", h.intervalDays ?? null, pos, Date.now());
       const id = Number(res.lastInsertRowid);
       const insert = db.prepare("INSERT INTO habit_checks (habit_id, day) VALUES (?, ?)");
+      if (h.cadence === "weekly") {
+        // samstags aufgeräumt, die laufende Woche ist noch offen
+        for (const d of days) if (new Date(`${d}T12:00:00Z`).getUTCDay() === 6 && d < weekStart(day) && rand() < h.rate) insert.run(id, d);
+        return;
+      }
+      if (h.cadence === "interval") {
+        // alle 3 Tage gegossen, das letzte Mal vor 2 Tagen → morgen wieder fällig
+        for (let d = addDays(day, -2); d >= days[0]; d = addDays(d, -(h.intervalDays ?? 3))) insert.run(id, d);
+        return;
+      }
       for (const d of days) {
         if (d === day && pos > 1) continue; // ein paar Habits sind heute noch offen
         if (rand() < h.rate) insert.run(id, d);
@@ -125,6 +188,7 @@ export function seedDemoData(db: DB, day: string = today()): void {
     });
 
     seedStudy(db, day);
+    seedGrades(db, day);
     seedDrive(db);
 
     for (const d of days.slice(-60)) {

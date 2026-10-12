@@ -2,14 +2,20 @@ import { describe, expect, it } from "vitest";
 import {
   addHabit,
   archiveHabit,
+  coveredDays,
   deleteHabit,
   habitHeatmap,
   listArchivedHabits,
   listHabits,
+  habitStatus,
+  period,
   reorderHabits,
   restoreHabit,
+  rhythmLabel,
   streak,
   toggleHabit,
+  updateHabit,
+  weekStart,
 } from "@/lib/habits";
 import { memoryDb } from "./support/db";
 
@@ -35,12 +41,12 @@ describe("Habits in der Datenbank", () => {
     const id = addHabit(db, "Lesen", "📚");
     expect(toggleHabit(db, id, "2026-10-11")).toBe(true);
     let [h] = listHabits(db, "2026-10-11");
-    expect(h).toMatchObject({ name: "Lesen", doneToday: true, streak: 1 });
+    expect(h).toMatchObject({ name: "Lesen", done: true, streak: 1 });
     expect(h.history.at(-1)).toEqual({ day: "2026-10-11", done: true });
 
     expect(toggleHabit(db, id, "2026-10-11")).toBe(false);
     [h] = listHabits(db, "2026-10-11");
-    expect(h.doneToday).toBe(false);
+    expect(h.done).toBe(false);
 
     archiveHabit(db, id);
     expect(listHabits(db, "2026-10-11")).toEqual([]);
@@ -110,5 +116,67 @@ describe("Habits umsortieren", () => {
     // neue Habits landen weiterhin hinten
     addHabit(db, "E", "✅");
     expect(names(db)).toEqual(["C", "A", "B", "E"]);
+  });
+});
+
+describe("Takt: wöchentlich, monatlich, alle N Tage", () => {
+  // 2026-10-12 ist ein Montag
+  it("Wochen laufen Mo–So, Monate nach Kalender", () => {
+    expect(weekStart("2026-10-18")).toBe("2026-10-12");
+    expect(weekStart("2026-10-12")).toBe("2026-10-12");
+    expect(period("weekly", "2026-10-14")).toEqual({ start: "2026-10-12", end: "2026-10-18" });
+    expect(period("monthly", "2026-02-10")).toEqual({ start: "2026-02-01", end: "2026-02-28" });
+    expect(period("monthly", "2026-12-31")).toEqual({ start: "2026-12-01", end: "2026-12-31" });
+  });
+
+  it("wöchentlich: erledigt für die ganze Woche, Serie in Wochen", () => {
+    const weekly = { cadence: "weekly" as const, intervalDays: null };
+    expect(habitStatus(weekly, ["2026-10-05", "2026-10-13"], "2026-10-16")).toEqual({ done: true, status: "diese Woche erledigt", streak: 2 });
+    // diese Woche noch offen: Serie zählt bis letzte Woche
+    expect(habitStatus(weekly, ["2026-09-29", "2026-10-06"], "2026-10-16")).toEqual({ done: false, status: "diese Woche · noch 3 Tage", streak: 2 });
+    expect(habitStatus(weekly, ["2026-09-29"], "2026-10-18").status).toBe("diese Woche · nur noch heute");
+    expect(habitStatus(weekly, ["2026-09-29"], "2026-10-18").streak).toBe(0);
+  });
+
+  it("monatlich", () => {
+    const monthly = { cadence: "monthly" as const, intervalDays: null };
+    expect(habitStatus(monthly, ["2026-08-31", "2026-09-01"], "2026-10-12")).toEqual({ done: false, status: "diesen Monat · noch 20 Tage", streak: 2 });
+    expect(habitStatus(monthly, ["2026-09-01", "2026-10-02"], "2026-10-12")).toMatchObject({ done: true, streak: 2 });
+  });
+
+  it("alle N Tage: fällig ab N Tagen nach dem letzten Häkchen", () => {
+    const every3 = { cadence: "interval" as const, intervalDays: 3 };
+    expect(habitStatus(every3, [], "2026-10-12")).toEqual({ done: false, status: "fällig", streak: 0 });
+    expect(habitStatus(every3, ["2026-10-12"], "2026-10-12")).toEqual({ done: true, status: "wieder in 3 Tagen", streak: 1 });
+    expect(habitStatus(every3, ["2026-10-12"], "2026-10-14").status).toBe("morgen wieder fällig");
+    expect(habitStatus(every3, ["2026-10-06", "2026-10-09", "2026-10-12"], "2026-10-15")).toEqual({ done: false, status: "heute fällig", streak: 3 });
+    expect(habitStatus(every3, ["2026-10-06", "2026-10-09"], "2026-10-14")).toEqual({ done: false, status: "seit 2 Tagen fällig", streak: 0 });
+    // zu spät abgehakt: Serie beginnt neu
+    expect(habitStatus(every3, ["2026-10-01", "2026-10-09"], "2026-10-10").streak).toBe(1);
+  });
+
+  it("abgedeckte Tage für Verlauf und Heatmap", () => {
+    const days = ["2026-10-10", "2026-10-11", "2026-10-12", "2026-10-13"];
+    expect([...coveredDays({ cadence: "weekly", intervalDays: null }, ["2026-10-13"], days)]).toEqual(["2026-10-12", "2026-10-13"]);
+    expect([...coveredDays({ cadence: "interval", intervalDays: 2 }, ["2026-10-10"], days)]).toEqual(["2026-10-10", "2026-10-11"]);
+  });
+
+  it("in der Datenbank: zweiter Tipp im Zeitraum nimmt das Häkchen zurück", () => {
+    const db = memoryDb();
+    const id = addHabit(db, "Zimmer aufräumen", "🧹", null, { cadence: "weekly", intervalDays: null });
+    expect(toggleHabit(db, id, "2026-10-12")).toBe(true);
+    let [h] = listHabits(db, "2026-10-14");
+    expect(h).toMatchObject({ cadence: "weekly", done: true, checkedToday: false, streak: 1, streakUnit: "Wochen", status: "diese Woche erledigt" });
+    expect(h.history.slice(-3).map((d) => d.done)).toEqual([true, true, true]);
+    expect(toggleHabit(db, id, "2026-10-14")).toBe(false);
+    [h] = listHabits(db, "2026-10-14");
+    expect(h.done).toBe(false);
+    expect(habitHeatmap(db, "2026-10-14", 1)).toEqual([{ day: "2026-10-14", count: 0, total: 1 }]);
+
+    updateHabit(db, id, { name: "Gießen", emoji: "🪴", remindAt: null, cadence: "interval", intervalDays: 4 });
+    toggleHabit(db, id, "2026-10-14");
+    [h] = listHabits(db, "2026-10-16");
+    expect(h).toMatchObject({ name: "Gießen", cadence: "interval", intervalDays: 4, done: true, status: "wieder in 2 Tagen" });
+    expect(rhythmLabel(h)).toBe("alle 4 Tage");
   });
 });

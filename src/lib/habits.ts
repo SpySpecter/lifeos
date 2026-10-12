@@ -1,43 +1,163 @@
 import type { DB } from "./db";
 import { addDays, lastDays } from "./time";
 
-export type Habit = {
+/**
+ * Gewohnheiten mit Takt: täglich, wöchentlich (Mo–So), monatlich (Kalendermonat) oder alle N Tage
+ * (rollierend ab dem letzten Häkchen). „Erledigt“ heißt: im aktuellen Zeitraum abgehakt.
+ */
+
+export const CADENCES = ["daily", "weekly", "monthly", "interval"] as const;
+export type Cadence = (typeof CADENCES)[number];
+export type Rhythm = { cadence: Cadence; intervalDays: number | null };
+
+export type Habit = Rhythm & {
   id: number;
   name: string;
   emoji: string;
   /** Erinnerungszeit 'HH:MM' (APP_TZ) oder null */
   remindAt: string | null;
-  doneToday: boolean;
+  /** im aktuellen Zeitraum erledigt */
+  done: boolean;
+  /** heute abgehakt (nicht nur früher im Zeitraum) */
+  checkedToday: boolean;
+  /** kurzer Stand für nicht-tägliche, z. B. „noch 3 Tage“ oder „wieder in 2 Tagen“ */
+  status: string | null;
   streak: number;
-  /** Erledigt-Status der letzten `historyDays` Tage, älteste zuerst. */
+  /** Einheit der Serie: Tage, Wochen, Monate oder „×“ pünktlich */
+  streakUnit: string;
+  /** Erledigt-Stand (Zeitraum abgedeckt) der letzten `historyDays` Tage, älteste zuerst. */
   history: { day: string; done: boolean }[];
 };
 
-export function listHabits(db: DB, day: string, historyDays = 7): Habit[] {
-  const habits = db
-    .prepare("SELECT id, name, emoji, remind_at AS remindAt FROM habits WHERE archived = 0 ORDER BY position, id")
-    .all() as { id: number; name: string; emoji: string; remindAt: string | null }[];
-  if (!habits.length) return [];
+const DAY_MS = 86_400_000;
+export const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T12:00:00Z`) - Date.parse(`${from}T12:00:00Z`)) / DAY_MS);
 
-  const from = addDays(day, -370);
-  const checks = db.prepare("SELECT habit_id, day FROM habit_checks WHERE day >= ? AND day <= ?").all(from, day) as {
-    habit_id: number;
-    day: string;
-  }[];
-  const byHabit = new Map<number, Set<string>>();
-  for (const c of checks) {
-    if (!byHabit.has(c.habit_id)) byHabit.set(c.habit_id, new Set());
-    byHabit.get(c.habit_id)!.add(c.day);
+/** Montag der Woche. */
+export function weekStart(day: string): string {
+  return addDays(day, -((new Date(`${day}T12:00:00Z`).getUTCDay() + 6) % 7));
+}
+const monthStart = (day: string) => `${day.slice(0, 7)}-01`;
+const monthEnd = (day: string) => addDays(monthStart(addDays(monthStart(day), 32)), -1);
+
+/** Kalender-Zeitraum, in dem ein Häkchen an `day` zählt (nicht für „alle N Tage“). */
+export function period(cadence: Exclude<Cadence, "interval">, day: string): { start: string; end: string } {
+  if (cadence === "weekly") {
+    const start = weekStart(day);
+    return { start, end: addDays(start, 6) };
+  }
+  if (cadence === "monthly") return { start: monthStart(day), end: monthEnd(day) };
+  return { start: day, end: day };
+}
+
+const previousPeriod = (cadence: Exclude<Cadence, "interval">, start: string) => period(cadence, addDays(start, -1));
+const intervalOf = (r: Rhythm) => Math.max(1, r.intervalDays ?? 1);
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+const UNITS: Record<Cadence, string> = { daily: "Tage", weekly: "Wochen", monthly: "Monate", interval: "× pünktlich" };
+
+/** Ist `d` durch ein Häkchen abgedeckt (Zeitraum erledigt)? Für Heatmap, Verlauf und Quote. */
+export function coveredDays(r: Rhythm, checks: string[], days: string[]): Set<string> {
+  const out = new Set<string>();
+  if (r.cadence === "interval") {
+    const n = intervalOf(r);
+    const wanted = new Set(days);
+    for (const c of checks) for (let i = 0; i < n; i++) if (wanted.has(addDays(c, i))) out.add(addDays(c, i));
+    return out;
+  }
+  const keys = new Set(checks.map((c) => period(r.cadence as Exclude<Cadence, "interval">, c).start));
+  for (const d of days) if (keys.has(period(r.cadence as Exclude<Cadence, "interval">, d).start)) out.add(d);
+  return out;
+}
+
+/** Stand einer Gewohnheit an `day`. `checks` aufsteigend sortiert, nur Tage bis einschließlich `day`. */
+export function habitStatus(r: Rhythm, checks: string[], day: string): { done: boolean; status: string | null; streak: number } {
+  const set = new Set(checks);
+  if (r.cadence === "daily") return { done: set.has(day), status: null, streak: streak(set, day) };
+
+  if (r.cadence === "interval") {
+    const n = intervalOf(r);
+    const last = checks.at(-1);
+    if (!last) return { done: false, status: "fällig", streak: 0 };
+    const nextDue = addDays(last, n);
+    const left = daysBetween(day, nextDue);
+    let streakN = 0;
+    if (left >= 0) {
+      // pünktlich = Abstand zum vorigen Häkchen höchstens N Tage
+      streakN = 1;
+      for (let i = checks.length - 1; i > 0 && daysBetween(checks[i - 1], checks[i]) <= n; i--) streakN++;
+    }
+    const status =
+      left > 0
+        ? last === day
+          ? `wieder in ${plural(n, "Tag", "Tagen")}`
+          : left === 1
+            ? "morgen wieder fällig"
+            : `wieder in ${left} Tagen`
+        : left === 0
+          ? "heute fällig"
+          : `seit ${plural(-left, "Tag", "Tagen")} fällig`;
+    return { done: left > 0, status, streak: streakN };
   }
 
+  const cur = period(r.cadence, day);
+  const inPeriod = (p: { start: string; end: string }) => checks.some((c) => c >= p.start && c <= p.end);
+  const done = inPeriod(cur);
+  let n = 0;
+  for (let p = done ? cur : previousPeriod(r.cadence, cur.start); inPeriod(p); p = previousPeriod(r.cadence, p.start)) n++;
+  const word = r.cadence === "weekly" ? "diese Woche" : "diesen Monat";
+  const left = daysBetween(day, cur.end) + 1;
+  return { done, status: done ? `${word} erledigt` : left === 1 ? `${word} · nur noch heute` : `${word} · noch ${left} Tage`, streak: n };
+}
+
+type HabitRow = { id: number; name: string; emoji: string; remindAt: string | null; cadence: Cadence; intervalDays: number | null };
+
+const HABIT_SELECT = "SELECT id, name, emoji, remind_at AS remindAt, cadence, interval_days AS intervalDays FROM habits";
+
+function checksByHabit(db: DB, from: string, to: string): Map<number, string[]> {
+  const rows = db.prepare("SELECT habit_id, day FROM habit_checks WHERE day >= ? AND day <= ? ORDER BY day").all(from, to) as { habit_id: number; day: string }[];
+  const map = new Map<number, string[]>();
+  for (const r of rows) {
+    if (!map.has(r.habit_id)) map.set(r.habit_id, []);
+    map.get(r.habit_id)!.push(r.day);
+  }
+  return map;
+}
+
+export function listHabits(db: DB, day: string, historyDays = 7): Habit[] {
+  const habits = db.prepare(`${HABIT_SELECT} WHERE archived = 0 ORDER BY position, id`).all() as HabitRow[];
+  if (!habits.length) return [];
+  const byHabit = checksByHabit(db, addDays(day, -400), day);
   const window = lastDays(day, historyDays);
   return habits.map((h) => {
-    const done = byHabit.get(h.id) ?? new Set<string>();
+    const checks = byHabit.get(h.id) ?? [];
+    const rhythm = { cadence: h.cadence, intervalDays: h.intervalDays };
+    const s = habitStatus(rhythm, checks, day);
+    const covered = coveredDays(rhythm, checks, window);
     return {
       ...h,
-      doneToday: done.has(day),
-      streak: streak(done, day),
-      history: window.map((d) => ({ day: d, done: done.has(d) })),
+      ...s,
+      checkedToday: checks.at(-1) === day,
+      streakUnit: UNITS[h.cadence],
+      history: window.map((d) => ({ day: d, done: covered.has(d) })),
+    };
+  });
+}
+
+/** Für Rückblicke: an wie vielen der `days` war der Zeitraum jeder aktiven Gewohnheit erledigt, plus Serie am letzten Tag. */
+export function habitCoverage(db: DB, days: string[]): (Rhythm & { id: number; name: string; emoji: string; covered: number; streak: number; streakUnit: string })[] {
+  const last = days[days.length - 1];
+  const habits = db.prepare(`${HABIT_SELECT} WHERE archived = 0 ORDER BY position, id`).all() as HabitRow[];
+  const byHabit = checksByHabit(db, addDays(days[0], -400), last);
+  return habits.map((h) => {
+    const checks = byHabit.get(h.id) ?? [];
+    const rhythm = { cadence: h.cadence, intervalDays: h.intervalDays };
+    return {
+      id: h.id,
+      name: h.name,
+      emoji: h.emoji,
+      ...rhythm,
+      covered: coveredDays(rhythm, checks, days).size,
+      streak: habitStatus(rhythm, checks, last).streak,
+      streakUnit: UNITS[h.cadence],
     };
   });
 }
@@ -53,27 +173,51 @@ export function streak(done: Set<string>, day: string): number {
   return n;
 }
 
+/** Kurzbeschreibung des Takts für Formulare und Listen. */
+export function rhythmLabel(r: Rhythm): string {
+  if (r.cadence === "weekly") return "wöchentlich";
+  if (r.cadence === "monthly") return "monatlich";
+  if (r.cadence === "interval") return intervalOf(r) === 1 ? "täglich" : `alle ${intervalOf(r)} Tage`;
+  return "täglich";
+}
+
+/**
+ * Abhaken bzw. rückgängig. Ist der Zeitraum schon durch ein früheres Häkchen erledigt (z. B. Montag bei
+ * „wöchentlich“), nimmt ein Tipp dieses Häkchen zurück, statt ein zweites zu setzen.
+ */
 export function toggleHabit(db: DB, habitId: number, day: string): boolean {
-  const exists = db.prepare("SELECT 1 FROM habit_checks WHERE habit_id = ? AND day = ?").get(habitId, day);
-  if (exists) {
-    db.prepare("DELETE FROM habit_checks WHERE habit_id = ? AND day = ?").run(habitId, day);
+  const h = db.prepare("SELECT cadence, interval_days AS intervalDays FROM habits WHERE id = ?").get(habitId) as Rhythm | undefined;
+  const rhythm: Rhythm = h ?? { cadence: "daily", intervalDays: null };
+  const from =
+    rhythm.cadence === "daily" ? day : rhythm.cadence === "interval" ? addDays(day, -(intervalOf(rhythm) - 1)) : period(rhythm.cadence, day).start;
+  const last = db
+    .prepare("SELECT day FROM habit_checks WHERE habit_id = ? AND day >= ? AND day <= ? ORDER BY day DESC LIMIT 1")
+    .get(habitId, from, day) as { day: string } | undefined;
+  if (last) {
+    db.prepare("DELETE FROM habit_checks WHERE habit_id = ? AND day = ?").run(habitId, last.day);
     return false;
   }
   db.prepare("INSERT INTO habit_checks (habit_id, day) VALUES (?, ?)").run(habitId, day);
   return true;
 }
 
-export function addHabit(db: DB, name: string, emoji: string, remindAt: string | null = null): number {
+const DAILY: Rhythm = { cadence: "daily", intervalDays: null };
+const storedInterval = (r: Rhythm) => (r.cadence === "interval" ? intervalOf(r) : null);
+
+export function addHabit(db: DB, name: string, emoji: string, remindAt: string | null = null, rhythm: Rhythm = DAILY): number {
   const { pos } = db.prepare("SELECT COALESCE(MAX(position), 0) + 1 AS pos FROM habits").get() as { pos: number };
   const res = db
-    .prepare("INSERT INTO habits (name, emoji, remind_at, position, created_at) VALUES (?, ?, ?, ?, ?)")
-    .run(name, emoji, remindAt, pos, Date.now());
+    .prepare("INSERT INTO habits (name, emoji, remind_at, cadence, interval_days, position, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)")
+    .run(name, emoji, remindAt, rhythm.cadence, storedInterval(rhythm), pos, Date.now());
   return Number(res.lastInsertRowid);
 }
 
-export function updateHabit(db: DB, habitId: number, h: { name: string; emoji: string; remindAt: string | null }): void {
+export function updateHabit(db: DB, habitId: number, h: { name: string; emoji: string; remindAt: string | null } & Partial<Rhythm>): void {
   const before = db.prepare("SELECT remind_at AS remindAt FROM habits WHERE id = ?").get(habitId) as { remindAt: string | null } | undefined;
   db.prepare("UPDATE habits SET name = ?, emoji = ?, remind_at = ? WHERE id = ?").run(h.name, h.emoji, h.remindAt, habitId);
+  if (h.cadence) {
+    db.prepare("UPDATE habits SET cadence = ?, interval_days = ? WHERE id = ?").run(h.cadence, storedInterval({ cadence: h.cadence, intervalDays: h.intervalDays ?? null }), habitId);
+  }
   // Neue Uhrzeit → die Erinnerung darf heute noch einmal kommen
   if (before && before.remindAt !== h.remindAt) db.prepare("DELETE FROM habit_reminders_sent WHERE habit_id = ?").run(habitId);
 }
@@ -121,16 +265,14 @@ export function listArchivedHabits(db: DB): { id: number; name: string; emoji: s
     .map((r) => ({ ...(r as { id: number; name: string; emoji: string; checks: number }) }));
 }
 
-/** Erledigte Tage je Habit für eine Heatmap (z. B. 12 Wochen). */
+/** Pro Tag: wie viele aktive Gewohnheiten ihren Zeitraum erfüllt hatten (z. B. 16 Wochen). */
 export function habitHeatmap(db: DB, day: string, days: number): { day: string; count: number; total: number }[] {
-  const { total } = db.prepare("SELECT COUNT(*) AS total FROM habits WHERE archived = 0").get() as { total: number };
+  const habits = db.prepare(`${HABIT_SELECT} WHERE archived = 0`).all() as HabitRow[];
   const range = lastDays(day, days);
-  const rows = db
-    .prepare(
-      "SELECT c.day, COUNT(*) AS n FROM habit_checks c JOIN habits h ON h.id = c.habit_id " +
-        "WHERE h.archived = 0 AND c.day >= ? AND c.day <= ? GROUP BY c.day",
-    )
-    .all(range[0], day) as { day: string; n: number }[];
-  const counts = new Map(rows.map((r) => [r.day, r.n]));
-  return range.map((d) => ({ day: d, count: counts.get(d) ?? 0, total }));
+  const byHabit = checksByHabit(db, addDays(range[0], -40), day);
+  const counts = new Map<string, number>();
+  for (const h of habits) {
+    for (const d of coveredDays(h, byHabit.get(h.id) ?? [], range)) counts.set(d, (counts.get(d) ?? 0) + 1);
+  }
+  return range.map((d) => ({ day: d, count: counts.get(d) ?? 0, total: habits.length }));
 }

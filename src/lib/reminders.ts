@@ -3,6 +3,8 @@ import type { DB } from "./db";
 import { listHabits, type Habit } from "./habits";
 import { countSubscriptions, sendToAll, type PushMessage, type Sender } from "./push";
 import { runBriefing } from "./briefing";
+import { runWeeklyReview } from "./weekly-review";
+import { runFocusPushes } from "./focus";
 import { runOneOffReminders } from "./one-off-reminders";
 import { localClock } from "./time";
 
@@ -24,14 +26,16 @@ export function dueHabits(db: DB, day: string, hhmm: string): Habit[] {
   );
   const now = minutes(hhmm);
   return listHabits(db, day, 1).filter(
-    (h) => h.remindAt && !h.doneToday && !sent.has(h.id) && minutes(h.remindAt) <= now && now - minutes(h.remindAt) <= CATCH_UP_MINUTES,
+    (h) => h.remindAt && !h.done && !sent.has(h.id) && minutes(h.remindAt) <= now && now - minutes(h.remindAt) <= CATCH_UP_MINUTES,
   );
 }
 
-export function reminderMessage(h: Pick<Habit, "id" | "name" | "emoji" | "streak">): PushMessage {
+export function reminderMessage(h: Pick<Habit, "id" | "name" | "emoji" | "streak"> & Partial<Pick<Habit, "cadence" | "status" | "streakUnit">>): PushMessage {
+  const daily = !h.cadence || h.cadence === "daily";
+  const unit = daily ? "Tagen" : h.streakUnit === "Wochen" ? "Wochen" : h.streakUnit === "Monate" ? "Monaten" : "Mal";
   return {
     title: `${h.emoji} ${h.name}`,
-    body: h.streak > 1 ? `Noch offen – halte deine Serie von ${h.streak} Tagen.` : "Heute noch nicht abgehakt.",
+    body: h.streak > 1 ? `Noch offen – halte deine Serie von ${h.streak} ${unit}.` : daily ? "Heute noch nicht abgehakt." : `Noch offen – ${h.status ?? "fällig"}.`,
     url: "/habits",
     tag: `habit-${h.id}`,
   };
@@ -72,11 +76,17 @@ export function startReminderLoop(getDb: () => DB, tz: string): void {
       await runOneOffReminders(getDb(), new Date(), tz);
     } catch (err) {
       console.error("[reminders] einmalig:", (err as Error).message);
+    }
+    try {
+      await runFocusPushes(getDb(), Date.now());
+    } catch (err) {
+      console.error("[fokus]", (err as Error).message);
     } finally {
       running = false;
     }
     // eigener Ablauf: die KI-Zusammenfassung darf die Habit-Erinnerungen nicht aufhalten (doppelt sendet claimPush nie)
     runBriefing(getDb(), new Date(), tz).catch((err) => console.error("[briefing]", (err as Error).message));
+    runWeeklyReview(getDb(), new Date(), tz).catch((err) => console.error("[rückblick]", (err as Error).message));
   };
   // Kurz nach Minutenbeginn prüfen, damit 21:00 auch um 21:00 ankommt
   const delay = 60_000 - (Date.now() % 60_000) + 2_000;

@@ -1,17 +1,21 @@
 import type { Metadata } from "next";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Repeat, Zap } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from "react";
 import { SettingsLink } from "@/components/nav";
 import { PageHeader } from "@/components/page-header";
-import { FlashcardSetView, MaterialRow, MaterialUpload, StudyPlanForm, StudySessionList, type CostInfo } from "@/components/study";
+import { NewDeckForm } from "@/components/flashcards";
+import { FocusButton } from "@/components/focus/focus-dock";
+import { StudyBars } from "@/components/study-bars";
+import { MaterialRow, MaterialUpload, StudyPlanForm, StudySessionList, type CostInfo } from "@/components/study";
 import { WidgetCard, WidgetSkeleton } from "@/components/widget-card";
 import { upcoming } from "@/integrations/exams";
-import { currentDay, loadExams } from "@/integrations/loaders";
+import { currentDay, loadDecks, loadExams } from "@/integrations/loaders";
 import { db } from "@/lib/db";
 import { env, isDemo } from "@/lib/env";
 import { costUsd } from "@/lib/openai";
-import { examCountdown, listFlashcardSets, listMaterials, listPlans, MAX_CONTEXT_CHARS, todaysSessions, type StudyPlan } from "@/lib/study";
+import type { Deck } from "@/lib/flashcards";
+import { examCountdown, formatMinutes, listMaterials, studyTime, weekRange, listPlans, MAX_CONTEXT_CHARS, todaysSessions, type StudyPlan } from "@/lib/study";
 import { addDays } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -34,6 +38,33 @@ async function TodayCard() {
       footer={sessions.length ? `${open.length ? `${open.reduce((n, s) => n + s.minutes, 0)} Min. offen` : "Alles geschafft 🎉"} · Tippen oder nach rechts wischen zum Abhaken.` : undefined}
     >
       {sessions.length ? <StudySessionList sessions={sessions} showPlan /> : <Empty>Heute steht nichts an.</Empty>}
+    </WidgetCard>
+  );
+}
+
+/** Plan gegen Ist: graue Spur = geplant, Balken = mit dem Fokus-Timer gemessen. */
+async function StudyTimeCard() {
+  const day = await currentDay();
+  const rows = studyTime(db(), weekRange(day, env().APP_TZ));
+  const planned = rows.reduce((n, r) => n + r.planned, 0);
+  const actual = rows.reduce((n, r) => n + r.actual, 0);
+  return (
+    <WidgetCard
+      title="Lernzeit diese Woche"
+      footer={rows.length ? "Graue Spur: geplant in den Lernplänen · Balken: gemessen mit dem Fokus-Timer." : undefined}
+    >
+      {rows.length ? (
+        <>
+          <p className="text-subhead text-muted-foreground tabular-nums">
+            <span className="text-title2 font-bold text-foreground">{formatMinutes(actual)}</span> von {formatMinutes(planned)} geplant
+          </p>
+          <div className="mt-3">
+            <StudyBars rows={rows} />
+          </div>
+        </>
+      ) : (
+        <Empty>Noch nichts geplant oder gemessen – starte oben rechts den Fokus-Timer.</Empty>
+      )}
     </WidgetCard>
   );
 }
@@ -122,29 +153,63 @@ async function MaterialsCard() {
   );
 }
 
-async function FlashcardsCard() {
-  await currentDay();
-  const sets = listFlashcardSets(db());
+function DeckRow({ deck }: { deck: Deck }) {
   return (
-    <WidgetCard title="Karteikarten" footer="RemNote-Format „Frage == Antwort“, eine Karte pro Zeile – kopieren und direkt in RemNote einfügen.">
-      {sets.length ? (
-        <ul className="-my-3 ios-rows">
-          {sets.map((s) => (
-            <FlashcardSetView
-              key={s.id}
-              set={{
-                id: s.id,
-                title: s.title,
-                content: s.content,
-                cards: s.cards,
-                created: new Date(s.createdAt).toLocaleDateString("de-DE", { day: "numeric", month: "short", timeZone: env().APP_TZ }),
-              }}
-            />
+    <li className="flex items-center gap-2 py-2.5">
+      <Link href={`/lernen/stapel?id=${deck.id}`} className="-my-2.5 -ml-4 min-w-0 flex-1 py-2.5 pl-4 active:bg-muted">
+        <p className="truncate text-body font-semibold">{deck.title}</p>
+        <p className="text-footnote text-muted-foreground tabular-nums">
+          {[deck.subject, `${deck.total} Karten`, deck.fresh ? `${deck.fresh} neu` : null].filter(Boolean).join(" · ")}
+        </p>
+      </Link>
+      <Link
+        href={`/lernen/wiederholen?deck=${deck.id}`}
+        aria-disabled={!deck.due}
+        className={cn(
+          "flex min-h-9 shrink-0 items-center gap-1 rounded-full px-3 text-subhead font-semibold tabular-nums",
+          deck.due ? "bg-tint text-white active:opacity-70" : "pointer-events-none bg-muted text-muted-foreground",
+        )}
+      >
+        <Repeat className="size-3.5" aria-hidden />
+        {deck.due ? `${deck.due} fällig` : "fertig"}
+      </Link>
+      <Link
+        href={`/lernen/wiederholen?deck=${deck.id}&modus=quick`}
+        aria-label={`${deck.title}: Quick Learn`}
+        className={cn("grid size-9 shrink-0 place-items-center rounded-full bg-muted text-tint-text active:opacity-70", !deck.total && "pointer-events-none opacity-50")}
+      >
+        <Zap className="size-4" aria-hidden />
+      </Link>
+    </li>
+  );
+}
+
+async function FlashcardsCard() {
+  const decks = await loadDecks();
+  const due = decks.reduce((n, d) => n + d.due, 0);
+  return (
+    <WidgetCard
+      title="Karteikarten"
+      action={
+        due ? (
+          <Link href="/lernen/wiederholen" className="flex min-h-11 items-center gap-1 rounded-full px-2 text-body text-tint-text active:opacity-60 tabular-nums">
+            Alle {due} lernen
+            <ChevronRight className="size-5" aria-hidden />
+          </Link>
+        ) : null
+      }
+      footer="Wiederholen plant die Abstände mit FSRS. ⚡ Quick Learn geht einen Stapel einfach durch, bis alles sitzt."
+    >
+      {decks.length ? (
+        <ul className="-my-2.5 ios-rows">
+          {decks.map((d) => (
+            <DeckRow key={d.id} deck={d} />
           ))}
         </ul>
       ) : (
-        <Empty>Noch keine Karteikarten – bei einem Material auf „Karteikarten“ tippen.</Empty>
+        <Empty>Noch keine Karteikarten – bei einem Material auf „Karteikarten“ tippen oder einen eigenen Stapel anlegen.</Empty>
       )}
+      <NewDeckForm />
     </WidgetCard>
   );
 }
@@ -152,11 +217,22 @@ async function FlashcardsCard() {
 export default function LearnPage() {
   return (
     <div className="space-y-6">
-      <PageHeader title="Lernen" trailing={<SettingsLink className="desktop:hidden" />} />
+      <PageHeader
+        title="Lernen"
+        trailing={
+          <div className="flex items-center gap-2">
+            <FocusButton />
+            <SettingsLink className="desktop:hidden" />
+          </div>
+        }
+      />
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:items-start">
         <div className="space-y-6">
           <Suspense fallback={<WidgetSkeleton lines={4} />}>
             <TodayCard />
+          </Suspense>
+          <Suspense fallback={<WidgetSkeleton lines={4} />}>
+            <StudyTimeCard />
           </Suspense>
           <Suspense fallback={<WidgetSkeleton lines={4} />}>
             <PlansCard />

@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { connection } from "next/server";
 import { Suspense } from "react";
+import { FocusDock } from "@/components/focus/focus-dock";
 import { BottomNav, Nav, SettingsLink } from "@/components/nav";
 import { PullToRefresh } from "@/components/pull-to-refresh";
 import { themeScript } from "@/components/theme";
@@ -71,6 +72,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <main className="flex-1 pt-3 desktop:pt-6">{children}</main>
         </div>
         <BottomNav />
+        <FocusDock />
       </body>
     </html>
   );

@@ -30,7 +30,7 @@ async function HabitsContent() {
   const [habits, day] = await Promise.all([loadHabits(30), currentDay()]);
   const heat = habitHeatmap(db(), day, 16 * 7);
   const archived = listArchivedHabits(db());
-  const done = habits.filter((h) => h.doneToday).length;
+  const done = habits.filter((h) => h.done).length;
   return (
     <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:items-start [&>*]:min-w-0">
       <div className="space-y-6">
@@ -62,7 +62,7 @@ async function HabitsContent() {
         {habits.length ? (
           <WidgetCard
             title="Verwalten"
-            footer="Am Griff ziehen zum Sortieren, nach links wischen für Bearbeiten, Archivieren und Löschen. Balken: erledigt an den letzten 30 Tagen."
+            footer="Am Griff ziehen zum Sortieren, nach links wischen für Bearbeiten, Archivieren und Löschen. Balken: Anteil der letzten 30 Tage, an denen der Zeitraum erledigt war."
           >
             <HabitManageList
               habits={habits.map((h) => ({
@@ -70,6 +70,8 @@ async function HabitsContent() {
                 name: h.name,
                 emoji: h.emoji,
                 remindAt: h.remindAt,
+                cadence: h.cadence,
+                intervalDays: h.intervalDays,
                 rate: h.history.filter((d) => d.done).length / h.history.length,
               }))}
             />

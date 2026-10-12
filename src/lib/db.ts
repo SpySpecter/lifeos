@@ -209,6 +209,109 @@ const MIGRATIONS: string[] = [
     error       TEXT
   );
   `,
+  `
+  -- eigene Karteikarten mit FSRS statt RemNote-Text (alte Sets werden verworfen)
+  DROP TABLE flashcard_sets;
+  CREATE TABLE flashcard_decks (
+    id          INTEGER PRIMARY KEY,
+    title       TEXT NOT NULL,
+    subject     TEXT,
+    material_id INTEGER REFERENCES study_materials(id) ON DELETE SET NULL,
+    created_at  INTEGER NOT NULL
+  );
+  CREATE TABLE flashcards (
+    id             INTEGER PRIMARY KEY,
+    deck_id        INTEGER NOT NULL REFERENCES flashcard_decks(id) ON DELETE CASCADE,
+    section        TEXT,
+    front          TEXT NOT NULL,
+    back           TEXT NOT NULL,
+    -- FSRS-Zustand (ts-fsrs Card); due/last_review in ms
+    due            INTEGER NOT NULL,
+    stability      REAL NOT NULL DEFAULT 0,
+    difficulty     REAL NOT NULL DEFAULT 0,
+    elapsed_days   INTEGER NOT NULL DEFAULT 0,
+    scheduled_days INTEGER NOT NULL DEFAULT 0,
+    learning_steps INTEGER NOT NULL DEFAULT 0,
+    reps           INTEGER NOT NULL DEFAULT 0,
+    lapses         INTEGER NOT NULL DEFAULT 0,
+    state          INTEGER NOT NULL DEFAULT 0, -- 0 neu, 1 lernen, 2 wiederholen, 3 neu lernen
+    last_review    INTEGER,
+    created_at     INTEGER NOT NULL
+  );
+  CREATE INDEX flashcards_deck ON flashcards (deck_id, due);
+  CREATE INDEX flashcards_due ON flashcards (due);
+  CREATE TABLE flashcard_reviews (
+    id          INTEGER PRIMARY KEY,
+    card_id     INTEGER NOT NULL REFERENCES flashcards(id) ON DELETE CASCADE,
+    rating      INTEGER NOT NULL, -- 1 nochmal, 2 schwer, 3 gut, 4 einfach
+    state       INTEGER NOT NULL, -- Zustand vor der Wiederholung
+    reviewed_at INTEGER NOT NULL
+  );
+  CREATE INDEX flashcard_reviews_time ON flashcard_reviews (reviewed_at);
+  `,
+  `
+  -- Gewohnheiten nicht nur täglich: 'daily' | 'weekly' (Mo–So) | 'monthly' | 'interval' (alle N Tage ab letztem Häkchen)
+  ALTER TABLE habits ADD COLUMN cadence TEXT NOT NULL DEFAULT 'daily';
+  ALTER TABLE habits ADD COLUMN interval_days INTEGER;
+  `,
+  `
+  -- Fokus-Timer: echte Lernzeit pro Fach; ends_at/phase für den Push am Ende einer Phase
+  CREATE TABLE focus_sessions (
+    id               INTEGER PRIMARY KEY,
+    subject          TEXT NOT NULL,
+    study_session_id INTEGER REFERENCES study_sessions(id) ON DELETE SET NULL,
+    kind             TEXT NOT NULL,          -- 'pomodoro' | 'frei'
+    started_at       INTEGER NOT NULL,
+    phase            TEXT,                   -- 'work' | 'break' | NULL (pausiert/fertig)
+    ends_at          INTEGER,                -- Ende der laufenden Phase
+    notified         INTEGER NOT NULL DEFAULT 0,
+    ended_at         INTEGER,
+    minutes          INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX focus_sessions_started ON focus_sessions (started_at);
+  CREATE INDEX focus_sessions_open ON focus_sessions (ended_at, ends_at);
+  `,
+  `
+  -- Noten: Kurse der Qualifikationsphase (Q1–Q4), Einzelnoten und offizielle Halbjahresnoten
+  CREATE TABLE grade_courses (
+    id             INTEGER PRIMARY KEY,
+    subject        TEXT NOT NULL,
+    kind           TEXT NOT NULL DEFAULT 'GK',   -- 'LK' | 'GK' | 'SK'
+    klausur_weight REAL NOT NULL DEFAULT 0.5,    -- Anteil der Klausuren an der Halbjahresnote
+    target         INTEGER,                      -- Wunschpunkte, z. B. 12
+    exam_slot      INTEGER,                      -- Prüfungsfach 1–5 (Block II)
+    exam_expected  INTEGER,                      -- erwartete Punkte in der Abiturprüfung
+    position       INTEGER NOT NULL DEFAULT 0,
+    created_at     INTEGER NOT NULL
+  );
+  CREATE TABLE grades (
+    id         INTEGER PRIMARY KEY,
+    course_id  INTEGER NOT NULL REFERENCES grade_courses(id) ON DELETE CASCADE,
+    semester   TEXT NOT NULL,                    -- 'Q1' … 'Q4'
+    kind       TEXT NOT NULL,                    -- 'klausur' | 'muendlich' | 'sonstig'
+    points     INTEGER NOT NULL,                 -- 0–15
+    weight     REAL NOT NULL DEFAULT 1,
+    label      TEXT,
+    day        TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX grades_course ON grades (course_id, semester);
+  CREATE TABLE grade_overrides (
+    course_id INTEGER NOT NULL REFERENCES grade_courses(id) ON DELETE CASCADE,
+    semester  TEXT NOT NULL,
+    points    INTEGER NOT NULL,
+    PRIMARY KEY (course_id, semester)
+  );
+  `,
+  `
+  -- Wochenrückblick (Sonntag): Schnappschuss pro Woche, Schlüssel = Montag
+  CREATE TABLE weekly_reviews (
+    week       TEXT PRIMARY KEY,
+    created_at INTEGER NOT NULL,
+    data       TEXT,
+    pushed_at  INTEGER
+  );
+  `,
 ];
 
 export type DB = DatabaseSync;

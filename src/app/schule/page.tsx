@@ -4,6 +4,7 @@ import { SettingsLink } from "@/components/nav";
 import { PageHeader } from "@/components/page-header";
 import { WidgetSkeleton } from "@/components/widget-card";
 import { ExamsWidget } from "@/components/widgets/exams-widget";
+import { GradesWidget } from "@/components/widgets/grades-widget";
 import { SchoolChanges } from "@/components/widgets/school-changes";
 import { SchoolWidget } from "@/components/widgets/school-widget";
 
@@ -26,6 +27,11 @@ export default function SchoolPage() {
           <div id="klausuren" className="scroll-mt-16 desktop:scroll-mt-20">
             <Suspense fallback={<WidgetSkeleton lines={5} />}>
               <ExamsWidget limit={30} href={null} />
+            </Suspense>
+          </div>
+          <div id="noten" className="scroll-mt-16 desktop:scroll-mt-20">
+            <Suspense fallback={<WidgetSkeleton lines={5} />}>
+              <GradesWidget />
             </Suspense>
           </div>
         </div>

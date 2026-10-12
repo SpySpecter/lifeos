@@ -9,7 +9,9 @@ import {
   GraduationCap,
   Heart,
   Inbox,
+  Layers,
   ListChecks,
+  Award,
   MailCheck,
   Music,
   Newspaper,
@@ -34,6 +36,8 @@ const ICONS: Record<WidgetId, [LucideIcon, string]> = {
   news: [Newspaper, "var(--cat-news)"],
   music: [Music, "var(--cat-music)"],
   github: [GitBranch, "var(--cat-github)"],
+  cards: [Layers, "var(--cat-cards)"],
+  grades: [Award, "var(--cat-grades)"],
 };
 
 const MODES: { value: WidgetMode; label: string }[] = [

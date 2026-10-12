@@ -5,7 +5,7 @@ import { connection } from "next/server";
 import type { ReactNode } from "react";
 import { Suspense } from "react";
 import { DisconnectButton } from "@/components/disconnect-button";
-import { BriefingForm, ClearInboxForm, MailProfileForm, ProfileForm, RuleForm, RuleList } from "@/components/settings-forms";
+import { BriefingForm, ClearInboxForm, MailProfileForm, ProfileForm, RuleForm, RuleList, WeeklyReviewForm } from "@/components/settings-forms";
 import { googleAccounts, missingFeatures } from "@/integrations/google";
 import { db, plainRows } from "@/lib/db";
 import { monthSpendUsd } from "@/lib/openai";
@@ -102,6 +102,8 @@ async function SettingsContent({ searchParams }: { searchParams: Promise<Record<
         {[
           ["/settings/uebersicht", "Übersicht anpassen", "Widgets der Heute-Seite ordnen und ein-/ausblenden"],
           ["/briefing", "Morgenbriefing", "Heute ansehen: Wetter, Schule, Termine, Nachrichten"],
+          ["/rueckblick", "Wochenrückblick", "Gewohnheiten, Lernzeit, Schlaf und Noten der Woche"],
+          ["/noten", "Noten", "Halbjahresnoten, Ziele und Abi-Hochrechnung"],
           ["/habits", "Erinnerungen", "Mitteilungen für Gewohnheiten"],
         ].map(([href, label, hint]) => (
           <Link key={href} href={href} className="flex min-h-14 items-center gap-3 px-4 py-2 active:bg-muted">
@@ -136,6 +138,16 @@ async function SettingsContent({ searchParams }: { searchParams: Promise<Record<
         status={settings.briefing.enabled ? `${settings.briefing.weekends ? "Täglich" : "Mo–Fr"} ${settings.briefing.time}` : "Aus"}
       >
         <BriefingForm briefing={settings.briefing} />
+      </Row>
+
+      <Row
+        id="rueckblick"
+        title="Wochenrückblick"
+        description="Sonntags eine Mitteilung mit Gewohnheiten, Lernzeit (Plan gegen Ist), Karteikarten, Schlaf und Noten der Woche – mit kurzem KI-Kommentar (unter 0,1 Cent pro Woche)."
+        state={settings.weeklyReview.enabled ? "ok" : "off"}
+        status={settings.weeklyReview.enabled ? `So ${settings.weeklyReview.time}` : "Aus"}
+      >
+        <WeeklyReviewForm review={settings.weeklyReview} />
       </Row>
 
       <Row id="untis" title="Schule (WebUntis)" description="Stundenplan, Ausfälle und Vertretungen der nächsten 7 Tage." state={uState} status={uStatus}>

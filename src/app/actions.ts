@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { normalizeLayout } from "@/lib/dashboard";
 import { isSingleEmoji, suggestEmoji } from "@/lib/emoji";
-import { addHabit, archiveHabit, deleteHabit, reorderHabits, restoreHabit, toggleHabit, updateHabit } from "@/lib/habits";
+import { addHabit, archiveHabit, CADENCES, deleteHabit, reorderHabits, restoreHabit, toggleHabit, updateHabit, type Rhythm } from "@/lib/habits";
 import { deleteSubscription, saveSubscription, sendToAll } from "@/lib/push";
 import { METRIC_KEYS, parseLooseNumber, upsertHealth, type HealthValues } from "@/lib/health";
 import { today, zonedToEpoch } from "@/lib/time";
@@ -22,22 +22,39 @@ import { decideDriveItem, markDriveItem, startDriveCleanup, undoDriveItem } from
 import { CATEGORIES } from "@/lib/mail/policy";
 import { getSettings, setSetting } from "@/lib/settings";
 import { getOrCreateBriefing } from "@/lib/briefing";
+import { getOrCreateReview } from "@/lib/weekly-review";
 import { BudgetExceededError } from "@/lib/openai";
+import { addCards, createDeck, deleteCard, deleteDeck, renameDeck, reviewCard, updateCard } from "@/lib/flashcards";
+import type { CardState, Rating } from "@/lib/fsrs";
 import {
   addMaterial,
-  deleteFlashcardSet,
   deleteMaterial,
   deletePlan,
   generateFlashcards,
   generateStudyPlan,
   MAX_FILE_BYTES,
   prepareMaterial,
-  saveFlashcardSet,
   savePlan,
   setPlanArchived,
   StudyError,
+  todaysSessions,
   toggleSession,
 } from "@/lib/study";
+import { cancelFocus, finishFocus, knownSubjects, startFocus, updateFocus } from "@/lib/focus";
+import {
+  addGrade,
+  addGradeCourse,
+  deleteGrade,
+  deleteGradeCourse,
+  GRADE_KINDS,
+  importGradeCourses,
+  SEMESTERS,
+  setOverride,
+  updateGradeCourse,
+} from "@/lib/grades";
+import { parseCourse } from "@/lib/courses";
+import { load } from "@/integrations/core";
+import { untis } from "@/integrations/untis";
 
 const id = z.number().int().positive();
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -59,25 +76,32 @@ const habitSchema = z.object({
     .string()
     .trim()
     .regex(/^(|([01]\d|2[0-3]):[0-5]\d)$/, "Uhrzeit im Format HH:MM"),
+  cadence: z.enum(CADENCES).catch("daily"),
+  intervalDays: z.coerce.number().int().min(2, "Mindestens alle 2 Tage").max(365, "Höchstens alle 365 Tage").nullable(),
 });
 
 function parseHabitForm(
   formData: FormData,
-): { error: string } | { habit: { name: string; emoji: string; remindAt: string | null } } {
+): { error: string } | { habit: { name: string; emoji: string; remindAt: string | null } & Rhythm } {
+  const cadence = formData.get("cadence") ?? "daily";
   const parsed = habitSchema.safeParse({
     name: formData.get("name") ?? "",
     emoji: formData.get("emoji") ?? "",
     remindAt: formData.get("remindAt") ?? "",
+    cadence,
+    intervalDays: cadence === "interval" ? (formData.get("intervalDays") ?? "") : null,
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Ungültige Eingabe" };
-  const { name, emoji, remindAt } = parsed.data;
-  return { habit: { name, emoji: emoji || suggestEmoji(name) || "✅", remindAt: remindAt || null } };
+  const { name, emoji, remindAt, intervalDays } = parsed.data;
+  return {
+    habit: { name, emoji: emoji || suggestEmoji(name) || "✅", remindAt: remindAt || null, cadence: parsed.data.cadence, intervalDays },
+  };
 }
 
 export async function addHabitAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const p = parseHabitForm(formData);
   if ("error" in p) return { ok: false, message: p.error };
-  addHabit(db(), p.habit.name, p.habit.emoji, p.habit.remindAt);
+  addHabit(db(), p.habit.name, p.habit.emoji, p.habit.remindAt, p.habit);
   revalidatePath("/", "layout");
   return { ok: true, message: `„${p.habit.name}“ angelegt${p.habit.remindAt ? ` · Erinnerung um ${p.habit.remindAt}` : ""}` };
 }
@@ -258,6 +282,26 @@ const briefingSchema = z.object({
   weekends: z.boolean(),
 });
 
+const weeklyReviewSchema = z.object({
+  enabled: z.boolean(),
+  time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Uhrzeit im Format HH:MM"),
+});
+
+export async function saveWeeklyReviewSettingsAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const parsed = weeklyReviewSchema.safeParse({ enabled: formData.get("enabled") === "on", time: String(formData.get("time") ?? "") });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
+  setSetting(db(), "weeklyReview", parsed.data);
+  revalidatePath("/settings");
+  return { ok: true, message: parsed.data.enabled ? `Gespeichert – kommt sonntags um ${parsed.data.time}` : "Gespeichert – Push aus" };
+}
+
+/** Rückblick einer Woche neu bauen (frische Zahlen, neuer KI-Kommentar). */
+export async function refreshReviewAction(week: string) {
+  const tz = env().APP_TZ;
+  await getOrCreateReview(db(), day.parse(week), today(tz), tz, { force: true });
+  revalidatePath("/rueckblick");
+}
+
 export async function saveBriefingSettingsAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const parsed = briefingSchema.safeParse({
     enabled: formData.get("enabled") === "on",
@@ -425,19 +469,220 @@ export async function generateFlashcardsAction(_prev: FormState, formData: FormD
   const count = z.coerce.number().int().min(5).max(100).safeParse(formData.get("count"));
   if (!materialId.success) return { ok: false, message: "Ungültiges Material" };
   if (!count.success) return { ok: false, message: "5 bis 100 Karten" };
+  let n: number;
+  let title: string;
   try {
-    const set = await generateFlashcards(db(), materialId.data, count.data);
-    saveFlashcardSet(db(), { materialId: materialId.data, ...set });
+    const res = await generateFlashcards(db(), materialId.data, count.data);
+    const deck = createDeck(db(), { title: res.title, subject: res.subject, materialId: materialId.data });
+    n = addCards(db(), deck, res.cards);
+    title = res.title;
   } catch (err) {
     return studyFailure(err);
   }
-  revalidatePath("/lernen");
-  return { ok: true, message: "Karteikarten erstellt – unten bei „Karteikarten“" };
+  revalidatePath("/", "layout");
+  return { ok: true, message: `${n} Karten im Stapel „${title}“ – unten bei „Karteikarten“` };
 }
 
-export async function deleteFlashcardSetAction(setId: number) {
-  deleteFlashcardSet(db(), id.parse(setId));
-  revalidatePath("/lernen");
+const deckSchema = z.object({
+  title: z.string().trim().min(1, "Name fehlt").max(120, "Maximal 120 Zeichen"),
+  subject: z.string().trim().max(60, "Fach: maximal 60 Zeichen"),
+});
+
+export async function createDeckAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const parsed = deckSchema.safeParse({ title: formData.get("title") ?? "", subject: formData.get("subject") ?? "" });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
+  const deckId = createDeck(db(), { title: parsed.data.title, subject: parsed.data.subject || null });
+  revalidatePath("/", "layout");
+  redirect(`/lernen/stapel?id=${deckId}`);
+}
+
+export async function renameDeckAction(deckId: number, _prev: FormState, formData: FormData): Promise<FormState> {
+  const parsed = deckSchema.safeParse({ title: formData.get("title") ?? "", subject: formData.get("subject") ?? "" });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
+  renameDeck(db(), id.parse(deckId), { title: parsed.data.title, subject: parsed.data.subject || null });
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Gespeichert" };
+}
+
+export async function deleteDeckAction(deckId: number) {
+  deleteDeck(db(), id.parse(deckId));
+  revalidatePath("/", "layout");
+  redirect("/lernen");
+}
+
+const cardSchema = z.object({
+  front: z.string().trim().min(1, "Vorderseite fehlt").max(1000, "Vorderseite: maximal 1000 Zeichen"),
+  back: z.string().trim().min(1, "Rückseite fehlt").max(2000, "Rückseite: maximal 2000 Zeichen"),
+});
+
+export async function addCardAction(deckId: number, _prev: FormState, formData: FormData): Promise<FormState> {
+  const parsed = cardSchema.safeParse({ front: formData.get("front") ?? "", back: formData.get("back") ?? "" });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
+  addCards(db(), id.parse(deckId), [parsed.data]);
+  revalidatePath("/", "layout");
+  return { ok: true, message: "Karte hinzugefügt" };
+}
+
+export async function updateCardAction(cardId: number, front: string, back: string): Promise<FormState> {
+  const parsed = cardSchema.safeParse({ front, back });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
+  updateCard(db(), id.parse(cardId), parsed.data);
+  revalidatePath("/lernen", "layout");
+  return { ok: true, message: "Gespeichert" };
+}
+
+export async function deleteCardAction(cardId: number) {
+  deleteCard(db(), id.parse(cardId));
+  revalidatePath("/", "layout");
+}
+
+/** Bewertung speichern; der neue Zustand geht zurück, damit Lernkarten in derselben Sitzung wiederkommen. */
+export async function reviewCardAction(cardId: number, rating: Rating): Promise<CardState | null> {
+  const card = reviewCard(db(), id.parse(cardId), z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]).parse(rating));
+  if (!card) return null;
+  const { due, stability, difficulty, elapsedDays, scheduledDays, learningSteps, reps, lapses, state, lastReview } = card;
+  return { due, stability, difficulty, elapsedDays, scheduledDays, learningSteps, reps, lapses, state, lastReview };
+}
+
+// ─── Noten ───────────────────────────────────────────────────────────────
+
+const semester = z.enum(SEMESTERS);
+const points = z.coerce.number().int().min(0, "0 bis 15 Punkte").max(15, "0 bis 15 Punkte");
+const courseKind = z.enum(["LK", "GK", "SK"]);
+const optionalInt = (min: number, max: number) =>
+  z.preprocess((v) => (v === "" || v === null || v === undefined ? null : v), z.coerce.number().int().min(min).max(max).nullable());
+
+function gradesChanged() {
+  revalidatePath("/noten");
+  revalidatePath("/", "layout");
+}
+
+export async function addGradeCourseAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const parsed = z
+    .object({ subject: z.string().trim().min(1, "Fach fehlt").max(60, "Maximal 60 Zeichen"), kind: courseKind })
+    .safeParse({ subject: formData.get("subject") ?? "", kind: formData.get("kind") ?? "GK" });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
+  addGradeCourse(db(), parsed.data);
+  gradesChanged();
+  return { ok: true, message: `${parsed.data.subject} (${parsed.data.kind}) angelegt` };
+}
+
+/** Kurse aus dem Stundenplan übernehmen (LK, GK, Seminarkurs). */
+export async function importGradeCoursesAction(): Promise<FormState> {
+  const week = await load(untis, undefined);
+  if (week.status !== "ok") return { ok: false, message: "Stundenplan gerade nicht erreichbar" };
+  const courses = week.data.days
+    .flatMap((d) => d.lessons)
+    .map((l) => parseCourse(l.subject))
+    .filter((c) => c.kind)
+    .map((c) => ({ subject: c.title, kind: (c.kind === "Seminarkurs" ? "SK" : c.kind) as "LK" | "GK" | "SK" }));
+  if (!courses.length) return { ok: false, message: "Keine Oberstufenkurse (LK/GK) im Stundenplan gefunden" };
+  const n = importGradeCourses(db(), courses);
+  gradesChanged();
+  return { ok: true, message: n ? `${n} ${n === 1 ? "Kurs" : "Kurse"} übernommen` : "Alle Kurse sind schon da" };
+}
+
+export async function updateGradeCourseAction(courseId: number, _prev: FormState, formData: FormData): Promise<FormState> {
+  const parsed = z
+    .object({
+      subject: z.string().trim().min(1, "Fach fehlt").max(60),
+      kind: courseKind,
+      klausurWeight: z.coerce.number().min(0).max(1),
+      target: optionalInt(1, 15),
+      examSlot: optionalInt(1, 5),
+      examExpected: optionalInt(0, 15),
+    })
+    .safeParse({
+      subject: formData.get("subject") ?? "",
+      kind: formData.get("kind") ?? "GK",
+      klausurWeight: formData.get("klausurWeight") ?? "0.5",
+      target: formData.get("target"),
+      examSlot: formData.get("examSlot"),
+      examExpected: formData.get("examExpected"),
+    });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
+  updateGradeCourse(db(), id.parse(courseId), parsed.data);
+  const official = optionalInt(0, 15).safeParse(formData.get("official"));
+  const sem = semester.safeParse(formData.get("semester"));
+  if (official.success && sem.success) setOverride(db(), courseId, sem.data, official.data);
+  gradesChanged();
+  return { ok: true, message: "Gespeichert" };
+}
+
+export async function deleteGradeCourseAction(courseId: number) {
+  deleteGradeCourse(db(), id.parse(courseId));
+  gradesChanged();
+}
+
+export async function addGradeAction(courseId: number, _prev: FormState, formData: FormData): Promise<FormState> {
+  const parsed = z
+    .object({ semester, kind: z.enum(GRADE_KINDS), points, label: z.string().trim().max(60), weight: z.coerce.number().min(0.25).max(4) })
+    .safeParse({
+      semester: formData.get("semester"),
+      kind: formData.get("kind") ?? "klausur",
+      points: formData.get("points") ?? "",
+      label: formData.get("label") ?? "",
+      weight: formData.get("weight") || "1",
+    });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
+  addGrade(db(), { courseId: id.parse(courseId), ...parsed.data, day: today(env().APP_TZ) });
+  gradesChanged();
+  return { ok: true, message: "Eingetragen" };
+}
+
+export async function deleteGradeAction(gradeId: number) {
+  deleteGrade(db(), id.parse(gradeId));
+  gradesChanged();
+}
+
+export async function setGradeSemesterAction(value: string) {
+  setSetting(db(), "gradeSemester", semester.parse(value));
+  gradesChanged();
+}
+
+// ─── Fokus-Timer ─────────────────────────────────────────────────────────
+
+export type FocusOptions = { sessions: { id: number; subject: string; topic: string; minutes: number }[]; subjects: string[] };
+
+/** Auswahl im Timer: heutige Lerneinheiten und bekannte Fächer. */
+export async function focusOptionsAction(): Promise<FocusOptions> {
+  const sessions = todaysSessions(db(), today(env().APP_TZ))
+    .filter((s) => !s.done)
+    .map((s) => ({ id: s.id, subject: s.planTitle, topic: s.topic, minutes: s.minutes }));
+  return { sessions, subjects: knownSubjects(db()) };
+}
+
+const focusStart = z.object({
+  subject: z.string().trim().min(1).max(80),
+  studySessionId: id.nullable(),
+  kind: z.enum(["pomodoro", "frei"]),
+  endsAt: z.number().int().positive().nullable(),
+});
+
+export async function startFocusAction(input: z.input<typeof focusStart>): Promise<number> {
+  return startFocus(db(), focusStart.parse(input));
+}
+
+export async function updateFocusAction(focusId: number, phase: "work" | "break" | null, endsAt: number | null, minutes: number) {
+  updateFocus(db(), id.parse(focusId), {
+    phase: z.enum(["work", "break"]).nullable().parse(phase),
+    endsAt: z.number().int().positive().nullable().parse(endsAt),
+    minutes: z.number().min(0).max(24 * 60).parse(minutes),
+  });
+}
+
+export async function finishFocusAction(focusId: number, minutes: number, markDone: boolean) {
+  finishFocus(db(), id.parse(focusId), z.number().min(0).max(24 * 60).parse(minutes), z.boolean().parse(markDone));
+  revalidatePath("/", "layout");
+}
+
+export async function cancelFocusAction(focusId: number) {
+  cancelFocus(db(), id.parse(focusId));
+}
+
+/** Am Ende einer Sitzung: Zähler auf „Heute“ und im Lernen-Tab aktualisieren. */
+export async function finishReviewAction() {
+  revalidatePath("/", "layout");
 }
 
 // ---------------------------------------------------------------------------
