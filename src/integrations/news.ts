@@ -15,6 +15,8 @@ export type NewsItem = {
   local?: boolean;
   /** Vorschaubild (nur https) */
   image?: string;
+  /** Anreißer als Klartext, höchstens ~300 Zeichen */
+  summary?: string;
 };
 
 const parser = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: "@" });
@@ -74,6 +76,29 @@ function imageOf(node: Node): string | undefined {
 
 const withImage = (item: NewsItem, image: string | undefined): NewsItem => (image ? { ...item, image } : item);
 
+const SUMMARY_MAX = 300;
+
+/** Anreißer als Klartext (HTML entfernt, gekürzt) – Futter für die KI-Zusammenfassung im Morgenbriefing. */
+export function plainSummary(raw: string): string | undefined {
+  const plain = decode(decode(raw).replace(/<[^>]*>/g, " "))
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!plain) return undefined;
+  if (plain.length <= SUMMARY_MAX) return plain;
+  const cut = plain.slice(0, SUMMARY_MAX);
+  return `${cut.slice(0, Math.max(cut.lastIndexOf(" "), SUMMARY_MAX - 40))}…`;
+}
+
+function summaryOf(node: Node, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const s = plainSummary(text(node[key]));
+    if (s) return s;
+  }
+  return undefined;
+}
+
+const withSummary = (item: NewsItem, summary: string | undefined): NewsItem => (summary ? { ...item, summary } : item);
+
 /** Unterstützt RSS 2.0 (Tagesschau, rbb24) und Atom (heise, The Verge). */
 export function parseFeed(xml: string, source: string, category = "Allgemein"): NewsItem[] {
   const doc = parser.parse(xml) as Node;
@@ -81,13 +106,16 @@ export function parseFeed(xml: string, source: string, category = "Allgemein"): 
   if (rss) {
     return asArray(rss.item as Node[]).map((item) =>
       withImage(
-        {
-          title: decode(text(item.title).trim()),
-          link: text(item.link).trim(),
-          published: item.pubDate ? new Date(text(item.pubDate)).toISOString() : null,
-          source,
-          category,
-        },
+        withSummary(
+          {
+            title: decode(text(item.title).trim()),
+            link: text(item.link).trim(),
+            published: item.pubDate ? new Date(text(item.pubDate)).toISOString() : null,
+            source,
+            category,
+          },
+          summaryOf(item, ["description", "content:encoded"]),
+        ),
         imageOf(item),
       ),
     );
@@ -99,13 +127,16 @@ export function parseFeed(xml: string, source: string, category = "Allgemein"): 
       const link = links.find((l) => !l["@rel"] || l["@rel"] === "alternate") ?? links[0];
       const date = entry.published ?? entry.updated;
       return withImage(
-        {
-          title: decode(text(entry.title).trim()),
-          link: link ? String(link["@href"] ?? "") : "",
-          published: date ? new Date(text(date)).toISOString() : null,
-          source,
-          category,
-        },
+        withSummary(
+          {
+            title: decode(text(entry.title).trim()),
+            link: link ? String(link["@href"] ?? "") : "",
+            published: date ? new Date(text(date)).toISOString() : null,
+            source,
+            category,
+          },
+          summaryOf(entry, ["summary", "content"]),
+        ),
         imageOf(entry),
       );
     });
@@ -230,7 +261,7 @@ export const news: Integration<NewsItem[]> = {
   mock() {
     const now = Date.now();
     const at = (min: number) => new Date(now - min * 60_000).toISOString();
-    const N = (title: string, source: string, category: string, min: number, local = false, img?: number): NewsItem => ({
+    const N = (title: string, source: string, category: string, min: number, local = false, img?: number, summary?: string): NewsItem => ({
       title,
       link: "#",
       published: at(min),
@@ -238,11 +269,12 @@ export const news: Integration<NewsItem[]> = {
       category,
       ...(local ? { local } : {}),
       ...(img ? { image: `/demo/news-${img}.svg` } : {}),
+      ...(summary ? { summary } : {}),
     });
     return [
-      N("Wandlitz: Neue Radwegverbindung nach Basdorf freigegeben", "rbb24", "Region", 15, true, 3),
-      N("Bundestag berät über neues Klimaschutzpaket", "Tagesschau Politik", "Politik", 25, false, 1),
-      N("Open-Source-KI: Neue Modelle laufen auf dem Laptop", "heise", "Tech", 40, false, 2),
+      N("Wandlitz: Neue Radwegverbindung nach Basdorf freigegeben", "rbb24", "Region", 15, true, 3, "Der 4,2 Kilometer lange Weg entlang der L100 ist ab sofort befahrbar. Schüler aus Basdorf kommen damit sicherer nach Wandlitz."),
+      N("Bundestag berät über neues Klimaschutzpaket", "Tagesschau Politik", "Politik", 25, false, 1, "Die Koalition will den Ausbau von Wärmepumpen stärker fördern. Die Opposition kritisiert die Finanzierung."),
+      N("Open-Source-KI: Neue Modelle laufen auf dem Laptop", "heise", "Tech", 40, false, 2, "Mehrere Anbieter haben kleine Sprachmodelle veröffentlicht, die ohne Grafikkarte flüssig laufen."),
       N("Transporter prallt gegen Baum – Fahrer schwer verletzt", "rbb24 Blaulicht", "Blaulicht", 55, false, 4),
       N("Bahn kündigt Ausbau im Regionalverkehr an", "Tagesschau", "Allgemein", 70, false, 5),
       N("Apple and Google agree on new AI interoperability standard", "The Verge", "Tech", 95, false, 6),

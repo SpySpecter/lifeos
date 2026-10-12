@@ -1,4 +1,4 @@
-import { CalendarX2, CloudSun, GraduationCap, NotebookPen } from "lucide-react";
+import { CalendarX2, ChevronRight, CloudSun, GraduationCap, NotebookPen, Sunrise } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { currentDay, loadExams, loadSettings, loadUntis, loadWeather } from "@/integrations/loaders";
@@ -70,6 +70,18 @@ export async function TodayHero() {
         <DayTile href="/schule#aenderungen" icon={<CalendarX2 className="size-4" />} color="var(--cat-calendar)" tile={changes} />
         <DayTile href="#wetter" icon={<CloudSun className="size-4" />} color="var(--cat-weather)" tile={wx} />
       </div>
+      {nowTime < "12:00" ? (
+        <Link href="/briefing" className="flex min-h-14 items-center gap-3 rounded-[20px] bg-card px-4 py-2 active:bg-muted">
+          <span className="grid size-8 shrink-0 place-items-center rounded-[8px] bg-[var(--cat-weather)] text-white" aria-hidden>
+            <Sunrise className="size-[1.125rem]" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-body font-semibold">Morgenbriefing</span>
+            <span className="block truncate text-footnote text-muted-foreground">Schule, Termine und die wichtigsten Nachrichten</span>
+          </span>
+          <ChevronRight className="size-5 text-muted-foreground" aria-hidden />
+        </Link>
+      ) : null}
     </div>
   );
 }

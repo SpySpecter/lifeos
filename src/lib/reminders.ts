@@ -2,7 +2,8 @@ import "server-only";
 import type { DB } from "./db";
 import { listHabits, type Habit } from "./habits";
 import { countSubscriptions, sendToAll, type PushMessage, type Sender } from "./push";
-import { dayString } from "./time";
+import { runBriefing } from "./briefing";
+import { localClock } from "./time";
 
 /**
  * Habit-Erinnerungen: Jede Minute prüfen, welche Gewohnheit ihre Uhrzeit erreicht hat und heute noch offen ist.
@@ -12,10 +13,7 @@ import { dayString } from "./time";
 
 const CATCH_UP_MINUTES = 180;
 
-export function localClock(now: Date, tz: string): { day: string; hhmm: string } {
-  const hhmm = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: tz }).format(now);
-  return { day: dayString(now, tz), hhmm };
-}
+export { localClock };
 
 const minutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
 
@@ -71,6 +69,8 @@ export function startReminderLoop(getDb: () => DB, tz: string): void {
     } finally {
       running = false;
     }
+    // eigener Ablauf: die KI-Zusammenfassung darf die Habit-Erinnerungen nicht aufhalten (doppelt sendet claimPush nie)
+    runBriefing(getDb(), new Date(), tz).catch((err) => console.error("[briefing]", (err as Error).message));
   };
   // Kurz nach Minutenbeginn prüfen, damit 21:00 auch um 21:00 ankommt
   const delay = 60_000 - (Date.now() % 60_000) + 2_000;

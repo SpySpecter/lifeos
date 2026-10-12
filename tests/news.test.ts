@@ -19,6 +19,16 @@ describe("parseFeed", () => {
     expect(items[1].published).toBe("2026-10-11T10:00:00.000Z");
   });
 
+  it("liest Anreißer als Klartext (ohne HTML, gekürzt)", () => {
+    const [i] = parseFeed(rss("<description>&lt;p&gt;Erster &amp;amp; &lt;b&gt;zweiter&lt;/b&gt; Satz.&lt;/p&gt;</description>"), "x");
+    expect(i.summary).toBe("Erster & zweiter Satz.");
+    const [long] = parseFeed(rss(`<description>${"Wort ".repeat(100)}</description>`), "x");
+    expect(long.summary!.length).toBeLessThanOrEqual(301);
+    expect(long.summary!.endsWith("Wort…")).toBe(true);
+    expect(parseFeed(rss("<content:encoded><![CDATA[<p>Aus <i>content</i></p>]]></content:encoded>"), "x")[0].summary).toBe("Aus content");
+    expect(parseFeed(rss(""), "x")[0]).not.toHaveProperty("summary");
+  });
+
   it("wirft bei unbekanntem Format", () => {
     expect(() => parseFeed("<html></html>", "x")).toThrow();
   });

@@ -25,7 +25,11 @@ export interface Integration<T, A = void> {
 
 export async function load<T, A = void>(integration: Integration<T, A>, args: A): Promise<WidgetResult<T>> {
   await connection(); // nie zur Build-Zeit vorrendern – alles hier ist Laufzeitdaten
+  return resolve(integration, args);
+}
 
+/** Wie `load`, aber ohne Request-Kontext – auch aus dem Hintergrund-Loop (Morgenbriefing) aufrufbar. */
+export async function resolve<T, A = void>(integration: Integration<T, A>, args: A): Promise<WidgetResult<T>> {
   if (isDemo()) {
     return { status: "ok", data: integration.mock(args), fetchedAt: Date.now(), stale: false };
   }
