@@ -6,6 +6,7 @@ import {
   habitHeatmap,
   listArchivedHabits,
   listHabits,
+  reorderHabits,
   restoreHabit,
   streak,
   toggleHabit,
@@ -82,5 +83,32 @@ describe("Habits löschen und wiederherstellen", () => {
     expect(listHabits(db, "2026-10-11").map((h) => h.id)).toEqual([keep]);
     expect(db.prepare("SELECT COUNT(*) AS n FROM habit_checks WHERE habit_id = ?").get(gone)).toMatchObject({ n: 0 });
     expect(db.prepare("SELECT COUNT(*) AS n FROM habit_checks").get()).toMatchObject({ n: 1 });
+  });
+});
+
+describe("Habits umsortieren", () => {
+  const names = (db: ReturnType<typeof memoryDb>) => listHabits(db, "2026-10-11").map((h) => h.name);
+
+  it("übernimmt die neue Reihenfolge", () => {
+    const db = memoryDb();
+    const a = addHabit(db, "A", "✅");
+    const b = addHabit(db, "B", "✅");
+    const c = addHabit(db, "C", "✅");
+    reorderHabits(db, [c, a, b]);
+    expect(names(db)).toEqual(["C", "A", "B"]);
+  });
+
+  it("fehlende Habits rutschen ans Ende, fremde und archivierte IDs zählen nicht", () => {
+    const db = memoryDb();
+    addHabit(db, "A", "✅");
+    addHabit(db, "B", "✅");
+    const c = addHabit(db, "C", "✅");
+    const d = addHabit(db, "D", "✅");
+    archiveHabit(db, d);
+    reorderHabits(db, [999, d, c, c]);
+    expect(names(db)).toEqual(["C", "A", "B"]);
+    // neue Habits landen weiterhin hinten
+    addHabit(db, "E", "✅");
+    expect(names(db)).toEqual(["C", "A", "B", "E"]);
   });
 });
