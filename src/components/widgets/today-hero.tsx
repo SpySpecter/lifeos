@@ -7,6 +7,7 @@ import { formatDayLong, formatTime, greeting } from "@/lib/time";
 import { cn } from "@/lib/utils";
 import { SettingsLink } from "../nav";
 import { PageHeader } from "../page-header";
+import { QuickAddButton } from "../quick-add";
 
 const unavailable = (label: string, configured: boolean): HeroTile => ({
   label,
@@ -61,7 +62,13 @@ export async function TodayHero() {
   const hello = `${greeting(now)}${settings.displayName ? `, ${settings.displayName}` : ""}`;
   return (
     <div className="space-y-4">
-      <PageHeader eyebrow={formatDayLong(day)} title={`${hello} ${greetingEmoji(hello)}`} trailing={<SettingsLink className="sm:hidden" />}>
+      <PageHeader eyebrow={formatDayLong(day)} title={`${hello} ${greetingEmoji(hello)}`} trailing={
+          <div className="flex items-center">
+            <QuickAddButton />
+            <SettingsLink className="desktop:hidden" />
+          </div>
+        }
+      >
         Heute
       </PageHeader>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

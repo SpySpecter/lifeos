@@ -32,7 +32,7 @@ async function HabitsContent() {
   const archived = listArchivedHabits(db());
   const done = habits.filter((h) => h.doneToday).length;
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start [&>*]:min-w-0">
+    <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:items-start [&>*]:min-w-0">
       <div className="space-y-6">
         <WidgetCard title="Heute">
           {habits.length ? (
@@ -112,7 +112,7 @@ async function HabitsContent() {
 export default function HabitsPage() {
   return (
     <div className="space-y-6">
-      <PageHeader title="Gewohnheiten" trailing={<SettingsLink className="sm:hidden" />} />
+      <PageHeader title="Gewohnheiten" trailing={<SettingsLink className="desktop:hidden" />} />
       <Suspense fallback={<WidgetSkeleton lines={8} />}>
         <HabitsContent />
       </Suspense>

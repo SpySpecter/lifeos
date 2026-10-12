@@ -42,7 +42,7 @@ async function Charts({ searchParams }: { searchParams: Promise<{ range?: string
         ))}
       </nav>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {METRIC_KEYS.map((k) => {
           const m = METRICS[k];
           const avg = average(series[k]);
@@ -96,7 +96,7 @@ async function Charts({ searchParams }: { searchParams: Promise<{ range?: string
 export default function HealthPage(props: PageProps<"/health">) {
   return (
     <div className="space-y-6">
-      <PageHeader title="Gesundheit" trailing={<SettingsLink className="sm:hidden" />} />
+      <PageHeader title="Gesundheit" trailing={<SettingsLink className="desktop:hidden" />} />
       <Suspense fallback={<WidgetSkeleton lines={8} />}>
         <Charts searchParams={props.searchParams as Promise<{ range?: string }>} />
       </Suspense>

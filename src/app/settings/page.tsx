@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { Suspense } from "react";
 import { DisconnectButton } from "@/components/disconnect-button";
 import { BriefingForm, ClearInboxForm, MailProfileForm, ProfileForm, RuleForm, RuleList } from "@/components/settings-forms";
-import { GMAIL_MODIFY, googleAccounts, hasScope } from "@/integrations/google";
+import { googleAccounts, missingFeatures } from "@/integrations/google";
 import { db, plainRows } from "@/lib/db";
 import { monthSpendUsd } from "@/lib/openai";
 import { getSettings } from "@/lib/settings";
@@ -36,7 +36,7 @@ function StatusLabel({ state, children }: { state: State; children: ReactNode })
 
 function Row({ id, title, description, state, status, children }: { id: string; title: string; description: string; state: State; status: string; children?: ReactNode }) {
   return (
-    <section id={id} className="scroll-mt-16 rounded-[20px] bg-card p-4 sm:scroll-mt-20">
+    <section id={id} className="scroll-mt-16 rounded-[20px] bg-card p-4 desktop:scroll-mt-20">
       <div className="flex flex-wrap items-start gap-x-3 gap-y-1">
         <div className="min-w-0 flex-1">
           <h2 className="text-body font-semibold">{title}</h2>
@@ -142,7 +142,7 @@ async function SettingsContent({ searchParams }: { searchParams: Promise<Record<
         {uState !== "ok" ? <p>In der <Code>.env</Code> eintragen: <Code>UNTIS_SERVER</Code>, <Code>UNTIS_SCHOOL</Code>, <Code>UNTIS_USER</Code>, <Code>UNTIS_PASSWORD</Code>.</p> : null}
       </Row>
 
-      <Row id="google" title="Google (Kalender, Gmail, Drive)" description="Mehrere Konten möglich. Kalender und Drive nur lesend; Gmail zusätzlich mit Schreibrechten für den Mail-Assistenten (Labels, Archiv, Papierkorb – nie endgültig löschen)." state={gState} status={gStatus}>
+      <Row id="google" title="Google (Kalender, Gmail, Drive)" description="Mehrere Konten möglich. Liest Kalender, Gmail und Drive; schreibt nur für neue Termine, den Mail-Assistenten (Labels, Archiv) und „Drive aufräumen“ – Mails und Dateien landen höchstens im Papierkorb, nie endgültig gelöscht." state={gState} status={gStatus}>
         {!demo && gState === "off" ? (
           <p>
             OAuth-Client (Typ „Webanwendung“) anlegen, Weiterleitungs-URI <Code>{googleRedirectUri()}</Code> eintragen, dann <Code>GOOGLE_CLIENT_ID</Code> und <Code>GOOGLE_CLIENT_SECRET</Code> in die <Code>.env</Code>. Anleitung: <Code>docs/SETUP.md</Code>.
@@ -153,17 +153,23 @@ async function SettingsContent({ searchParams }: { searchParams: Promise<Record<
             {accounts.map((a) => (
               <li key={a} className="flex min-h-11 flex-wrap items-center gap-2 py-1.5">
                 <span className="min-w-0 flex-1 truncate font-semibold">{a}</span>
-                {hasScope(a, GMAIL_MODIFY) ? (
-                  <span className="text-footnote text-muted-foreground">Mail-Sortierung aktiv</span>
-                ) : (
+                {missingFeatures(a).length ? (
                   <a href="/api/auth/google/start" className="text-footnote font-semibold text-serious">
-                    Neu verbinden für Mail-Sortierung
+                    Neu verbinden für {missingFeatures(a).join(", ")}
                   </a>
+                ) : (
+                  <span className="text-footnote text-muted-foreground">Alle Funktionen aktiv</span>
                 )}
                 <DisconnectButton provider={`google:${a}`} />
               </li>
             ))}
           </ul>
+        ) : null}
+        {accounts.length || demo ? (
+          <Link href="/drive" className="flex min-h-11 items-center justify-between rounded-[14px] bg-muted px-3 font-semibold text-tint-text active:opacity-60">
+            Drive aufräumen
+            <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
+          </Link>
         ) : null}
         {!demo && googleConfigured ? connectBtn("google", accounts.length ? "Weiteres Google-Konto verbinden" : "Mit Google verbinden") : null}
       </Row>

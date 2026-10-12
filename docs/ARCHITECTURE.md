@@ -35,7 +35,7 @@ interface Integration<T, A = void> {
 | News (RSS/Atom) | 20 min | none |
 | GitHub (one GraphQL query) | 10 min | fine-grained PAT |
 | WebUntis | 15 min | username/password (`webuntis` package) |
-| Google (Calendar, Gmail, Drive) | 5 min | OAuth 2 web flow, offline access, read-only scopes |
+| Google (Calendar, Gmail, Drive) | 5 min | OAuth 2 web flow, offline access; write access only for calendar events and Gmail/Drive trash |
 | Spotify | 1 min | OAuth 2 + PKCE (no client secret) |
 
 ## Data

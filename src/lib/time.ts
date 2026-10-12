@@ -17,6 +17,32 @@ export function localClock(now: Date, tz: string): { day: string; hhmm: string }
   return { day: dayString(now, tz), hhmm };
 }
 
+/** Lokale Wanduhrzeit (`YYYY-MM-DD`, `HH:MM`) in `tz` als Zeitstempel – auch über die Zeitumstellung hinweg. */
+export function zonedToEpoch(day: string, hhmm: string, tz: string = DEFAULT_TZ): number {
+  const asUtc = Date.parse(`${day}T${hhmm}:00Z`);
+  // Versatz der Zone zu diesem Zeitpunkt bestimmen; zweimal, weil er sich durch die Korrektur selbst ändern kann
+  const offset = (t: number) => {
+    const p = Object.fromEntries(
+      new Intl.DateTimeFormat("en-GB", {
+        timeZone: tz,
+        hourCycle: "h23",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      })
+        .formatToParts(new Date(t))
+        .map((x) => [x.type, x.value]),
+    );
+    return Date.parse(`${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}:${p.second}Z`) - t;
+  };
+  let t = asUtc - offset(asUtc);
+  t = asUtc - offset(t);
+  return t;
+}
+
 export function addDays(day: string, n: number): string {
   const d = new Date(`${day}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + n);

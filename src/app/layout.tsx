@@ -40,7 +40,7 @@ async function UserBadge() {
   }
   const h = await headers();
   const name = h.get("tailscale-user-name") ?? h.get("tailscale-user-login");
-  return name ? <span className="hidden text-xs text-muted-foreground sm:inline">{name}</span> : null;
+  return name ? <span className="hidden text-xs text-muted-foreground desktop:inline">{name}</span> : null;
 }
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -50,8 +50,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body className="min-h-full">
-        {/* Ab sm: klassische Leiste oben. Auf dem Handy übernehmen große Titel + Tab-Leiste unten. */}
-        <header className="sticky top-0 z-20 hidden border-b border-border bg-bar backdrop-blur-xl backdrop-saturate-150 sm:block">
+        {/* Mit Maus/Trackpad: klassische Leiste oben. Auf iPhone und iPad übernehmen große Titel + Tab-Leiste unten. */}
+        <header className="sticky top-0 z-20 hidden border-b border-border bg-bar backdrop-blur-xl backdrop-saturate-150 desktop:block">
           <div className="mx-auto flex h-14 max-w-7xl items-center gap-4 px-6">
             <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">
               <span className="grid size-7 place-items-center rounded-lg bg-foreground text-sm text-background">L</span>
@@ -66,9 +66,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             </div>
           </div>
         </header>
-        <div className="mx-auto flex min-h-full max-w-7xl flex-col px-[max(16px,env(safe-area-inset-left))] pb-[calc(104px+env(safe-area-inset-bottom))] sm:px-6 sm:pb-12">
+        <div className="mx-auto flex min-h-full max-w-7xl flex-col pr-[max(16px,env(safe-area-inset-right))] pb-[calc(104px+env(safe-area-inset-bottom))] pl-[max(16px,env(safe-area-inset-left))] md:pr-[max(24px,env(safe-area-inset-right))] md:pl-[max(24px,env(safe-area-inset-left))] desktop:px-6 desktop:pb-12">
           <PullToRefresh />
-          <main className="flex-1 pt-3 sm:pt-6">{children}</main>
+          <main className="flex-1 pt-3 desktop:pt-6">{children}</main>
         </div>
         <BottomNav />
       </body>

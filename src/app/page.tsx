@@ -14,6 +14,7 @@ import { NewsWidget } from "@/components/widgets/news-widget";
 import { SchoolWidget } from "@/components/widgets/school-widget";
 import { SpotifyWidget } from "@/components/widgets/spotify-widget";
 import { loadSummary, type Summary } from "@/components/widgets/summary-tiles";
+import { RemindersCard } from "@/components/widgets/reminders-card";
 import { TodayHero, TodayHeroSkeleton } from "@/components/widgets/today-hero";
 import { WeatherWidget } from "@/components/widgets/weather-widget";
 import { loadSettings } from "@/integrations/loaders";
@@ -83,11 +84,11 @@ async function Sections() {
   return (
     <>
       {large.length ? (
-        <div className="gap-6 md:columns-2 xl:columns-3">
+        <div className="gap-6 md:columns-2 lg:columns-3">
           {large.map(({ id }) => {
             const Full = FULL[id];
             return (
-              <div key={id} id={ANCHOR[id]} className="mb-6 scroll-mt-4 break-inside-avoid sm:scroll-mt-20">
+              <div key={id} id={ANCHOR[id]} className="mb-6 scroll-mt-4 break-inside-avoid desktop:scroll-mt-20">
                 <Suspense fallback={<WidgetSkeleton lines={5} />}>
                   <Full />
                 </Suspense>
@@ -102,7 +103,7 @@ async function Sections() {
           <h2 id="mehr" className="mb-2 flex min-h-11 items-center px-1 text-title3 font-bold tracking-tight">
             Mehr
           </h2>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {compact.map(({ id }) => (
               <Suspense key={id} fallback={<TileSkeleton />}>
                 <CompactTile id={id} />
@@ -124,6 +125,9 @@ export default function Today() {
     <div className="space-y-6">
       <Suspense fallback={<TodayHeroSkeleton />}>
         <TodayHero />
+      </Suspense>
+      <Suspense fallback={null}>
+        <RemindersCard />
       </Suspense>
       <Suspense fallback={<WidgetSkeleton lines={6} />}>
         <Sections />

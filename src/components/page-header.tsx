@@ -42,15 +42,16 @@ export function PageHeader({
       <div
         aria-hidden={!collapsed}
         className={cn(
-          "pointer-events-none fixed inset-x-0 top-0 z-20 border-b border-transparent bg-transparent pt-[env(safe-area-inset-top)] transition-[background-color,border-color] duration-200 sm:hidden",
+          "pointer-events-none fixed inset-x-0 top-0 z-20 border-b border-transparent bg-transparent pt-[env(safe-area-inset-top)] transition-[background-color,border-color] duration-200 desktop:hidden",
           collapsed && "pointer-events-auto border-border bg-bar backdrop-blur-xl backdrop-saturate-150",
         )}
       >
         <div className="relative flex h-11 items-center justify-center px-24">
           {back ? (
-            <Link href={back.href} className={cn("absolute top-0 left-1 flex h-11 items-center text-body text-tint-text opacity-0 transition-opacity", collapsed && "opacity-100")} inert={!collapsed}>
-              <ChevronLeft className="size-6" aria-hidden />
-              {back.label}
+            <Link href={back.href} className={cn("absolute top-0 left-1 flex h-11 max-w-23 items-center text-body text-tint-text opacity-0 transition-opacity", collapsed && "opacity-100")} inert={!collapsed}>
+              <ChevronLeft className="size-6 shrink-0" aria-hidden />
+              {/* wie iOS: passt der Titel der Vorseite nicht neben den Titel, heißt der Knopf „Zurück“ */}
+              <span className="truncate">{back.label.length > 8 ? "Zurück" : back.label}</span>
             </Link>
           ) : null}
           <span className={cn("truncate text-body font-semibold opacity-0 transition-opacity duration-200", collapsed && "opacity-100")}>
@@ -70,7 +71,7 @@ export function PageHeader({
           {back.label}
         </Link>
       ) : null}
-      <header className="flex items-end gap-2 pt-2 sm:pt-0">
+      <header className="flex items-end gap-2 pt-2 desktop:pt-0">
         <div ref={ref} className="min-w-0 flex-1">
           {eyebrow ? <p className="text-footnote font-semibold text-muted-foreground uppercase">{eyebrow}</p> : null}
           <h1 className="font-heading text-largetitle font-bold tracking-tight text-balance">{title}</h1>
