@@ -128,6 +128,43 @@ const MIGRATIONS: string[] = [
     pushed_at  INTEGER
   );
   `,
+  `
+  -- Lernen: hochgeladene Markdown-Texte (schon aus PDFs umgewandelt), KI-Lernpläne und Karteikarten
+  CREATE TABLE study_materials (
+    id         INTEGER PRIMARY KEY,
+    title      TEXT NOT NULL,
+    subject    TEXT,
+    content    TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE TABLE study_plans (
+    id              INTEGER PRIMARY KEY,
+    title           TEXT NOT NULL,
+    subject         TEXT,
+    exam_day        TEXT NOT NULL,
+    minutes_per_day INTEGER NOT NULL,
+    material_ids    TEXT NOT NULL, -- JSON-Array
+    created_at      INTEGER NOT NULL,
+    archived        INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE study_sessions (
+    id      INTEGER PRIMARY KEY,
+    plan_id INTEGER NOT NULL REFERENCES study_plans(id) ON DELETE CASCADE,
+    day     TEXT NOT NULL,
+    topic   TEXT NOT NULL,
+    tasks   TEXT NOT NULL, -- JSON-Array
+    minutes INTEGER NOT NULL,
+    done    INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX study_sessions_day ON study_sessions (day);
+  CREATE TABLE flashcard_sets (
+    id          INTEGER PRIMARY KEY,
+    material_id INTEGER REFERENCES study_materials(id) ON DELETE SET NULL,
+    title       TEXT NOT NULL,
+    content     TEXT NOT NULL, -- fertiger RemNote-Text
+    created_at  INTEGER NOT NULL
+  );
+  `,
 ];
 
 export type DB = DatabaseSync;

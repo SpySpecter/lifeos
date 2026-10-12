@@ -14,6 +14,10 @@ const nextConfig: NextConfig = {
   devIndicators: false,
   cacheComponents: true,
   partialPrefetching: true,
+  experimental: {
+    // Markdown-Material für die Lernseite (max. 2 MB pro Datei, mehrere auf einmal)
+    serverActions: { bodySizeLimit: "10mb" },
+  },
   async headers() {
     return [
       { source: "/:path*", headers: securityHeaders },

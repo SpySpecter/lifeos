@@ -1,6 +1,6 @@
 "use client";
 
-import { GraduationCap, Heart, ListChecks, Settings, Sun } from "lucide-react";
+import { BookOpen, GraduationCap, Heart, ListChecks, Settings, Sun } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,7 @@ export const TABS = [
   { href: "/", label: "Heute", icon: Sun },
   { href: "/schule", label: "Schule", icon: GraduationCap },
   { href: "/habits", label: "Habits", icon: ListChecks },
+  { href: "/lernen", label: "Lernen", icon: BookOpen },
   { href: "/health", label: "Gesundheit", icon: Heart },
 ] as const;
 
@@ -23,7 +24,7 @@ export function BottomNav() {
   return (
     <nav
       aria-label="Hauptnavigation"
-      className="fixed inset-x-3 bottom-[max(0.5rem,env(safe-area-inset-bottom))] z-30 mx-auto grid max-w-md grid-cols-4 gap-1 rounded-full bg-bar p-1 shadow-[0_8px_30px_rgb(0_0_0/0.12)] ring-1 ring-black/5 backdrop-blur-xl backdrop-saturate-150 sm:hidden dark:ring-white/10"
+      className="fixed inset-x-3 bottom-[max(0.5rem,env(safe-area-inset-bottom))] z-30 mx-auto grid max-w-md grid-cols-5 gap-1 rounded-full bg-bar p-1 shadow-[0_8px_30px_rgb(0_0_0/0.12)] ring-1 ring-black/5 backdrop-blur-xl backdrop-saturate-150 sm:hidden dark:ring-white/10"
     >
       {TABS.map(({ href, label, icon: Icon }) => {
         const active = isActive(href, path);
