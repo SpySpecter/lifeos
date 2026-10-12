@@ -11,6 +11,12 @@ export function today(tz: string = DEFAULT_TZ, now: Date = new Date()): string {
   return dayString(now, tz);
 }
 
+/** Tag und Uhrzeit 'HH:MM' (24 h) in der Zeitzone des Nutzers – für minütliche Zeitpläne. */
+export function localClock(now: Date, tz: string): { day: string; hhmm: string } {
+  const hhmm = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: tz }).format(now);
+  return { day: dayString(now, tz), hhmm };
+}
+
 export function addDays(day: string, n: number): string {
   const d = new Date(`${day}T12:00:00Z`);
   d.setUTCDate(d.getUTCDate() + n);

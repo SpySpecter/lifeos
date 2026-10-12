@@ -1,4 +1,4 @@
-/** Wird einmal beim Serverstart aufgerufen: startet die Habit-Erinnerungen (nicht im Build und nicht im Demo-Modus). */
+/** Wird einmal beim Serverstart aufgerufen: startet Habit-Erinnerungen und Morgenbriefing (nicht im Build und nicht im Demo-Modus). */
 export async function register() {
   if (process.env.NEXT_RUNTIME !== "nodejs" || process.env.NEXT_PHASE === "phase-production-build") return;
   const { env, isDemo } = await import("./lib/env");

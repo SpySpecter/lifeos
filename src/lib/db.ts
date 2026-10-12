@@ -119,6 +119,15 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY (habit_id, day)
   );
   `,
+  `
+  -- ein Morgenbriefing pro Tag; data = NULL, solange nur der Push-Versand vorgemerkt ist
+  CREATE TABLE briefings (
+    day        TEXT PRIMARY KEY,
+    created_at INTEGER NOT NULL,
+    data       TEXT,
+    pushed_at  INTEGER
+  );
+  `,
 ];
 
 export type DB = DatabaseSync;
@@ -154,7 +163,7 @@ export function migrate(db: DB): void {
   }
 }
 
-const globalForDb = globalThis as unknown as { lifeosDb?: DB };
+const globalForDb = globalThis as unknown as { lifeosDb?: DB; lifeosDbVersion?: number };
 
 /** Eine Verbindung pro Prozess (überlebt Hot Reload im Dev-Modus). Demo-Modus nutzt eine eigene Datei. */
 export function db(): DB {
@@ -163,6 +172,10 @@ export function db(): DB {
     const conn = openDatabase(file);
     if (isDemo()) seedDemoData(conn);
     globalForDb.lifeosDb = conn;
+  } else if (globalForDb.lifeosDbVersion !== MIGRATIONS.length) {
+    // Hot Reload mit neuer Migration: die alte Verbindung nachziehen statt Neustart
+    migrate(globalForDb.lifeosDb);
   }
+  globalForDb.lifeosDbVersion = MIGRATIONS.length;
   return globalForDb.lifeosDb;
 }

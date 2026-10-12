@@ -16,6 +16,7 @@ import { isDemo } from "@/lib/env";
 import { clearInbox, decideMail, runTriage, undoMail, upsertRule } from "@/lib/mail/triage";
 import { CATEGORIES } from "@/lib/mail/policy";
 import { getSettings, setSetting } from "@/lib/settings";
+import { getOrCreateBriefing } from "@/lib/briefing";
 
 const id = z.number().int().positive();
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -228,6 +229,31 @@ export async function saveProfileAction(_prev: FormState, formData: FormData): P
   setSetting(db(), "goals", { steps: p.steps, sleep: p.sleep, workout: p.workout, energy: p.energy });
   revalidatePath("/", "layout");
   return { ok: true, message: "Gespeichert" };
+}
+
+const briefingSchema = z.object({
+  enabled: z.boolean(),
+  time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Uhrzeit im Format HH:MM"),
+  weekends: z.boolean(),
+});
+
+export async function saveBriefingSettingsAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const parsed = briefingSchema.safeParse({
+    enabled: formData.get("enabled") === "on",
+    time: String(formData.get("time") ?? ""),
+    weekends: formData.get("weekends") === "on",
+  });
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
+  setSetting(db(), "briefing", parsed.data);
+  revalidatePath("/settings");
+  const b = parsed.data;
+  return { ok: true, message: b.enabled ? `Gespeichert – kommt ${b.weekends ? "täglich" : "Mo–Fr"} um ${b.time}` : "Gespeichert – Push aus" };
+}
+
+/** Briefing für heute neu bauen (fragt die KI erneut). */
+export async function refreshBriefingAction(): Promise<void> {
+  await getOrCreateBriefing(db(), new Date(), env().APP_TZ, { force: true });
+  revalidatePath("/briefing");
 }
 
 export async function saveMailProfileAction(_prev: FormState, formData: FormData): Promise<FormState> {

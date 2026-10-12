@@ -5,7 +5,7 @@ import { connection } from "next/server";
 import type { ReactNode } from "react";
 import { Suspense } from "react";
 import { DisconnectButton } from "@/components/disconnect-button";
-import { ClearInboxForm, MailProfileForm, ProfileForm, RuleForm, RuleList } from "@/components/settings-forms";
+import { BriefingForm, ClearInboxForm, MailProfileForm, ProfileForm, RuleForm, RuleList } from "@/components/settings-forms";
 import { GMAIL_MODIFY, googleAccounts, hasScope } from "@/integrations/google";
 import { db, plainRows } from "@/lib/db";
 import { monthSpendUsd } from "@/lib/openai";
@@ -101,6 +101,7 @@ async function SettingsContent({ searchParams }: { searchParams: Promise<Record<
       <nav aria-label="Allgemein" className="ios-inset-rows rounded-[20px] bg-card">
         {[
           ["/settings/uebersicht", "Übersicht anpassen", "Widgets der Heute-Seite ordnen und ein-/ausblenden"],
+          ["/briefing", "Morgenbriefing", "Heute ansehen: Wetter, Schule, Termine, Nachrichten"],
           ["/habits", "Erinnerungen", "Mitteilungen für Gewohnheiten"],
         ].map(([href, label, hint]) => (
           <Link key={href} href={href} className="flex min-h-14 items-center gap-3 px-4 py-2 active:bg-muted">
@@ -125,6 +126,16 @@ async function SettingsContent({ searchParams }: { searchParams: Promise<Record<
 
       <Row id="profil" title="Persönlich" description="Begrüßung, Standard-Ort fürs Wetter und deine Tagesziele." state="ok" status="">
         <ProfileForm settings={settings} />
+      </Row>
+
+      <Row
+        id="briefing"
+        title="Morgenbriefing"
+        description="Jeden Morgen eine Mitteilung mit Wetter, erster Stunde, Ausfällen, Klausuren und den wichtigsten Nachrichten (von der KI zusammengefasst, ca. 0,2 Cent pro Tag). Mitteilungen erlaubst du unter „Erinnerungen“."
+        state={settings.briefing.enabled ? "ok" : "off"}
+        status={settings.briefing.enabled ? `${settings.briefing.weekends ? "Täglich" : "Mo–Fr"} ${settings.briefing.time}` : "Aus"}
+      >
+        <BriefingForm briefing={settings.briefing} />
       </Row>
 
       <Row id="untis" title="Schule (WebUntis)" description="Stundenplan, Ausfälle und Vertretungen der nächsten 7 Tage." state={uState} status={uStatus}>

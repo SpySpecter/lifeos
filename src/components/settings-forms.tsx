@@ -6,6 +6,7 @@ import {
   addMailRuleAction,
   clearInboxAction,
   deleteMailRuleAction,
+  saveBriefingSettingsAction,
   saveMailProfileAction,
   saveProfileAction,
   type FormState,
@@ -57,6 +58,37 @@ export function ProfileForm({ settings }: { settings: Settings }) {
           <Field id="energy" label="Aktivkalorien" defaultValue={settings.goals.energy} inputMode="numeric" />
         </div>
       </fieldset>
+      <div className="flex items-center gap-3">
+        <Button type="submit" disabled={pending}>
+          Speichern
+        </Button>
+        <Status state={state} />
+      </div>
+    </form>
+  );
+}
+
+// `switch` macht daraus in Safari (iOS 18+) einen echten iOS-Schalter, sonst bleibt es eine Checkbox
+const SWITCH = { switch: "" } as Record<string, string>;
+
+export function BriefingForm({ briefing }: { briefing: Settings["briefing"] }) {
+  const [state, action, pending] = useActionState<FormState, FormData>(saveBriefingSettingsAction, null);
+  return (
+    <form action={action} className="space-y-4">
+      <div className="ios-inset-rows -mx-4 border-y border-border [--inset:16px]">
+        <label className="flex min-h-11 items-center gap-3 px-4 py-2">
+          <span className="flex-1 text-body">Als Mitteilung schicken</span>
+          <input type="checkbox" name="enabled" defaultChecked={briefing.enabled} className="size-5 accent-tint" {...SWITCH} />
+        </label>
+        <label className="flex min-h-11 items-center gap-3 px-4 py-2">
+          <span className="flex-1 text-body">Uhrzeit</span>
+          <Input type="time" name="time" defaultValue={briefing.time} required className="w-[8.5rem] tabular-nums" />
+        </label>
+        <label className="flex min-h-11 items-center gap-3 px-4 py-2">
+          <span className="flex-1 text-body">Auch am Wochenende</span>
+          <input type="checkbox" name="weekends" defaultChecked={briefing.weekends} className="size-5 accent-tint" {...SWITCH} />
+        </label>
+      </div>
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={pending}>
           Speichern

@@ -22,7 +22,7 @@ export type HeroTile = {
 };
 
 /** Wie im Schul-Widget: Kurscodes („LK Ma 1“) übersetzen, sonst den Langnamen aus Untis nehmen. */
-const courseName = (l: SchoolLesson) => {
+export const courseName = (l: SchoolLesson) => {
   const c = parseCourse(l.subject);
   return c.kind || !l.subjectLong ? c.title : l.subjectLong;
 };
