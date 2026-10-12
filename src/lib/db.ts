@@ -249,6 +249,11 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX flashcard_reviews_time ON flashcard_reviews (reviewed_at);
   `,
+  `
+  -- Gewohnheiten nicht nur täglich: 'daily' | 'weekly' (Mo–So) | 'monthly' | 'interval' (alle N Tage ab letztem Häkchen)
+  ALTER TABLE habits ADD COLUMN cadence TEXT NOT NULL DEFAULT 'daily';
+  ALTER TABLE habits ADD COLUMN interval_days INTEGER;
+  `,
 ];
 
 export type DB = DatabaseSync;

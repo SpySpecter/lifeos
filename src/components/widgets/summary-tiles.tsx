@@ -73,7 +73,7 @@ const SUMMARIES: Record<WidgetId, () => Promise<Summary>> = {
   },
   async habits() {
     const habits = await loadHabits(1);
-    const done = habits.filter((h) => h.doneToday).length;
+    const done = habits.filter((h) => h.done).length;
     return {
       icon: ListChecks,
       color: "var(--cat-habits)",

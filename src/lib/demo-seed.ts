@@ -1,5 +1,6 @@
 import type { DB } from "./db";
 import { addCards, createDeck, reviewCard } from "./flashcards";
+import { weekStart } from "./habits";
 import { upsertHealth } from "./health";
 import { addDays, lastDays, today } from "./time";
 
@@ -110,12 +111,14 @@ function seedDrive(db: DB): void {
   );
 }
 
-const DEMO_HABITS = [
+const DEMO_HABITS: { name: string; emoji: string; rate: number; cadence?: "weekly" | "interval"; intervalDays?: number }[] = [
   { name: "Lesen (20 min)", emoji: "📚", rate: 0.75 },
   { name: "Sport", emoji: "🏃", rate: 0.6 },
   { name: "Vokabeln", emoji: "🗣️", rate: 0.8 },
   { name: "Kein Handy nach 22 Uhr", emoji: "🌙", rate: 0.55 },
   { name: "2 Liter Wasser", emoji: "💧", rate: 0.85 },
+  { name: "Zimmer aufräumen", emoji: "🧹", rate: 0.85, cadence: "weekly" },
+  { name: "Pflanzen gießen", emoji: "🪴", rate: 1, cadence: "interval", intervalDays: 3 },
 ];
 
 /** Füllt die Demo-Datenbank mit plausiblen Daten der letzten 120 Tage (nur wenn sie leer ist). */
@@ -131,10 +134,20 @@ export function seedDemoData(db: DB, day: string = today()): void {
     db.exec("DELETE FROM habit_checks; DELETE FROM habits; DELETE FROM health;");
     DEMO_HABITS.forEach((h, pos) => {
       const res = db
-        .prepare("INSERT INTO habits (name, emoji, position, created_at) VALUES (?, ?, ?, ?)")
-        .run(h.name, h.emoji, pos, Date.now());
+        .prepare("INSERT INTO habits (name, emoji, cadence, interval_days, position, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+        .run(h.name, h.emoji, h.cadence ?? "daily", h.intervalDays ?? null, pos, Date.now());
       const id = Number(res.lastInsertRowid);
       const insert = db.prepare("INSERT INTO habit_checks (habit_id, day) VALUES (?, ?)");
+      if (h.cadence === "weekly") {
+        // samstags aufgeräumt, die laufende Woche ist noch offen
+        for (const d of days) if (new Date(`${d}T12:00:00Z`).getUTCDay() === 6 && d < weekStart(day) && rand() < h.rate) insert.run(id, d);
+        return;
+      }
+      if (h.cadence === "interval") {
+        // alle 3 Tage gegossen, das letzte Mal vor 2 Tagen → morgen wieder fällig
+        for (let d = addDays(day, -2); d >= days[0]; d = addDays(d, -(h.intervalDays ?? 3))) insert.run(id, d);
+        return;
+      }
       for (const d of days) {
         if (d === day && pos > 1) continue; // ein paar Habits sind heute noch offen
         if (rand() < h.rate) insert.run(id, d);

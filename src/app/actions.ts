@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { normalizeLayout } from "@/lib/dashboard";
 import { isSingleEmoji, suggestEmoji } from "@/lib/emoji";
-import { addHabit, archiveHabit, deleteHabit, reorderHabits, restoreHabit, toggleHabit, updateHabit } from "@/lib/habits";
+import { addHabit, archiveHabit, CADENCES, deleteHabit, reorderHabits, restoreHabit, toggleHabit, updateHabit, type Rhythm } from "@/lib/habits";
 import { deleteSubscription, saveSubscription, sendToAll } from "@/lib/push";
 import { METRIC_KEYS, parseLooseNumber, upsertHealth, type HealthValues } from "@/lib/health";
 import { today, zonedToEpoch } from "@/lib/time";
@@ -59,25 +59,32 @@ const habitSchema = z.object({
     .string()
     .trim()
     .regex(/^(|([01]\d|2[0-3]):[0-5]\d)$/, "Uhrzeit im Format HH:MM"),
+  cadence: z.enum(CADENCES).catch("daily"),
+  intervalDays: z.coerce.number().int().min(2, "Mindestens alle 2 Tage").max(365, "Höchstens alle 365 Tage").nullable(),
 });
 
 function parseHabitForm(
   formData: FormData,
-): { error: string } | { habit: { name: string; emoji: string; remindAt: string | null } } {
+): { error: string } | { habit: { name: string; emoji: string; remindAt: string | null } & Rhythm } {
+  const cadence = formData.get("cadence") ?? "daily";
   const parsed = habitSchema.safeParse({
     name: formData.get("name") ?? "",
     emoji: formData.get("emoji") ?? "",
     remindAt: formData.get("remindAt") ?? "",
+    cadence,
+    intervalDays: cadence === "interval" ? (formData.get("intervalDays") ?? "") : null,
   });
   if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "Ungültige Eingabe" };
-  const { name, emoji, remindAt } = parsed.data;
-  return { habit: { name, emoji: emoji || suggestEmoji(name) || "✅", remindAt: remindAt || null } };
+  const { name, emoji, remindAt, intervalDays } = parsed.data;
+  return {
+    habit: { name, emoji: emoji || suggestEmoji(name) || "✅", remindAt: remindAt || null, cadence: parsed.data.cadence, intervalDays },
+  };
 }
 
 export async function addHabitAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const p = parseHabitForm(formData);
   if ("error" in p) return { ok: false, message: p.error };
-  addHabit(db(), p.habit.name, p.habit.emoji, p.habit.remindAt);
+  addHabit(db(), p.habit.name, p.habit.emoji, p.habit.remindAt, p.habit);
   revalidatePath("/", "layout");
   return { ok: true, message: `„${p.habit.name}“ angelegt${p.habit.remindAt ? ` · Erinnerung um ${p.habit.remindAt}` : ""}` };
 }

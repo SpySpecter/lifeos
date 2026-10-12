@@ -137,7 +137,7 @@ function EventsCard({ events, tz }: { events: NonNullable<Briefing["events"]>; t
 function HabitsCard({ day }: { day: string }) {
   const habits = listHabits(db(), day, 1);
   if (!habits.length) return null;
-  const open = habits.filter((h) => !h.doneToday);
+  const open = habits.filter((h) => !h.done);
   return (
     <WidgetCard title="Gewohnheiten" href="/habits" hrefLabel="Abhaken">
       {open.length ? (
@@ -146,7 +146,8 @@ function HabitsCard({ day }: { day: string }) {
             <li key={h.id} className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1.5 text-subhead">
               <span aria-hidden>{h.emoji}</span>
               {h.name}
-              {h.streak > 1 ? <span className="text-footnote text-muted-foreground tabular-nums">· {h.streak} Tage</span> : null}
+              {h.status ? <span className="text-footnote text-muted-foreground">· {h.status}</span> : null}
+              {h.streak > 1 ? <span className="text-footnote text-muted-foreground tabular-nums">· {h.streak} {h.streakUnit}</span> : null}
             </li>
           ))}
         </ul>

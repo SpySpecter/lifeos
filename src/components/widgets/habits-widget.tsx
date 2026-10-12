@@ -6,7 +6,7 @@ import { WidgetCard } from "../widget-card";
 
 export async function HabitsWidget({ className }: { className?: string }) {
   const habits = await loadHabits(7);
-  const done = habits.filter((h) => h.doneToday).length;
+  const done = habits.filter((h) => h.done).length;
   return (
     <WidgetCard title="Gewohnheiten" href="/habits" className={className}>
       {habits.length ? (

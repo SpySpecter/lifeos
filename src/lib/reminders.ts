@@ -24,14 +24,16 @@ export function dueHabits(db: DB, day: string, hhmm: string): Habit[] {
   );
   const now = minutes(hhmm);
   return listHabits(db, day, 1).filter(
-    (h) => h.remindAt && !h.doneToday && !sent.has(h.id) && minutes(h.remindAt) <= now && now - minutes(h.remindAt) <= CATCH_UP_MINUTES,
+    (h) => h.remindAt && !h.done && !sent.has(h.id) && minutes(h.remindAt) <= now && now - minutes(h.remindAt) <= CATCH_UP_MINUTES,
   );
 }
 
-export function reminderMessage(h: Pick<Habit, "id" | "name" | "emoji" | "streak">): PushMessage {
+export function reminderMessage(h: Pick<Habit, "id" | "name" | "emoji" | "streak"> & Partial<Pick<Habit, "cadence" | "status" | "streakUnit">>): PushMessage {
+  const daily = !h.cadence || h.cadence === "daily";
+  const unit = daily ? "Tagen" : h.streakUnit === "Wochen" ? "Wochen" : h.streakUnit === "Monate" ? "Monaten" : "Mal";
   return {
     title: `${h.emoji} ${h.name}`,
-    body: h.streak > 1 ? `Noch offen – halte deine Serie von ${h.streak} Tagen.` : "Heute noch nicht abgehakt.",
+    body: h.streak > 1 ? `Noch offen – halte deine Serie von ${h.streak} ${unit}.` : daily ? "Heute noch nicht abgehakt." : `Noch offen – ${h.status ?? "fällig"}.`,
     url: "/habits",
     tag: `habit-${h.id}`,
   };
