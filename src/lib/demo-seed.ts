@@ -48,7 +48,7 @@ const DEMO_VOCAB = [
 
 /** Lernplan für die Demo: Informatik-Klausur in 9 Tagen, vorgestern erledigt, gestern liegengeblieben. */
 function seedStudy(db: DB, day: string): void {
-  db.exec("DELETE FROM flashcard_decks; DELETE FROM study_sessions; DELETE FROM study_plans; DELETE FROM study_materials;");
+  db.exec("DELETE FROM focus_sessions; DELETE FROM flashcard_decks; DELETE FROM study_sessions; DELETE FROM study_plans; DELETE FROM study_materials;");
   const now = Date.now();
   const material = Number(
     db
@@ -77,6 +77,10 @@ function seedStudy(db: DB, day: string): void {
   // ein Teil schon gelernt: zwei fällig, zwei erst in ein paar Tagen
   const ids = (db.prepare("SELECT id FROM flashcards WHERE deck_id = ? ORDER BY id").all(deck) as { id: number }[]).map((r) => r.id);
   for (const [i, cardId] of ids.slice(0, 4).entries()) reviewCard(db, cardId, 4, now - (i < 2 ? 12 : 1) * 86_400_000);
+  // gemessene Lernzeit für „Plan gegen Ist“: heute früh schon zwei Fokus-Sitzungen
+  const focus = db.prepare("INSERT INTO focus_sessions (subject, kind, started_at, ended_at, minutes) VALUES (?, ?, ?, ?, ?)");
+  focus.run("Informatik", "pomodoro", now - 3 * 3600_000, now - 3 * 3600_000 + 55 * 60_000, 50);
+  focus.run("Englisch", "frei", now - 90 * 60_000, now - 70 * 60_000, 20);
   const vocab = createDeck(db, { title: "Englisch Vokabeln", subject: "Englisch" }, now);
   addCards(db, vocab, DEMO_VOCAB, now);
 }

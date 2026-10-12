@@ -254,6 +254,23 @@ const MIGRATIONS: string[] = [
   ALTER TABLE habits ADD COLUMN cadence TEXT NOT NULL DEFAULT 'daily';
   ALTER TABLE habits ADD COLUMN interval_days INTEGER;
   `,
+  `
+  -- Fokus-Timer: echte Lernzeit pro Fach; ends_at/phase für den Push am Ende einer Phase
+  CREATE TABLE focus_sessions (
+    id               INTEGER PRIMARY KEY,
+    subject          TEXT NOT NULL,
+    study_session_id INTEGER REFERENCES study_sessions(id) ON DELETE SET NULL,
+    kind             TEXT NOT NULL,          -- 'pomodoro' | 'frei'
+    started_at       INTEGER NOT NULL,
+    phase            TEXT,                   -- 'work' | 'break' | NULL (pausiert/fertig)
+    ends_at          INTEGER,                -- Ende der laufenden Phase
+    notified         INTEGER NOT NULL DEFAULT 0,
+    ended_at         INTEGER,
+    minutes          INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX focus_sessions_started ON focus_sessions (started_at);
+  CREATE INDEX focus_sessions_open ON focus_sessions (ended_at, ends_at);
+  `,
 ];
 
 export type DB = DatabaseSync;

@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { SettingsLink } from "@/components/nav";
 import { PageHeader } from "@/components/page-header";
 import { NewDeckForm } from "@/components/flashcards";
+import { FocusButton } from "@/components/focus/focus-dock";
 import { MaterialRow, MaterialUpload, StudyPlanForm, StudySessionList, type CostInfo } from "@/components/study";
 import { WidgetCard, WidgetSkeleton } from "@/components/widget-card";
 import { upcoming } from "@/integrations/exams";
@@ -13,7 +14,7 @@ import { db } from "@/lib/db";
 import { env, isDemo } from "@/lib/env";
 import { costUsd } from "@/lib/openai";
 import type { Deck } from "@/lib/flashcards";
-import { examCountdown, listMaterials, listPlans, MAX_CONTEXT_CHARS, todaysSessions, type StudyPlan } from "@/lib/study";
+import { examCountdown, formatMinutes, listMaterials, studyTime, weekRange, listPlans, MAX_CONTEXT_CHARS, todaysSessions, type StudyPlan } from "@/lib/study";
 import { addDays } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -36,6 +37,47 @@ async function TodayCard() {
       footer={sessions.length ? `${open.length ? `${open.reduce((n, s) => n + s.minutes, 0)} Min. offen` : "Alles geschafft 🎉"} · Tippen oder nach rechts wischen zum Abhaken.` : undefined}
     >
       {sessions.length ? <StudySessionList sessions={sessions} showPlan /> : <Empty>Heute steht nichts an.</Empty>}
+    </WidgetCard>
+  );
+}
+
+/** Plan gegen Ist: graue Spur = geplant, Balken = mit dem Fokus-Timer gemessen. */
+async function StudyTimeCard() {
+  const day = await currentDay();
+  const rows = studyTime(db(), weekRange(day, env().APP_TZ));
+  const planned = rows.reduce((n, r) => n + r.planned, 0);
+  const actual = rows.reduce((n, r) => n + r.actual, 0);
+  const max = Math.max(1, ...rows.map((r) => Math.max(r.planned, r.actual)));
+  return (
+    <WidgetCard
+      title="Lernzeit diese Woche"
+      footer={rows.length ? "Graue Spur: geplant in den Lernplänen · Balken: gemessen mit dem Fokus-Timer." : undefined}
+    >
+      {rows.length ? (
+        <>
+          <p className="text-subhead text-muted-foreground tabular-nums">
+            <span className="text-title2 font-bold text-foreground">{formatMinutes(actual)}</span> von {formatMinutes(planned)} geplant
+          </p>
+          <ul className="mt-3 space-y-3" aria-label="Lernzeit pro Fach">
+            {rows.map((r) => (
+              <li key={r.subject} title={`${r.subject}: ${r.actual} von ${r.planned} Min.`}>
+                <div className="flex items-baseline justify-between gap-2 text-subhead">
+                  <span className="truncate font-medium">{r.subject}</span>
+                  <span className="shrink-0 text-muted-foreground tabular-nums">
+                    {r.actual} / {r.planned} Min.
+                  </span>
+                </div>
+                <div className="relative mt-1 h-2.5">
+                  <span className="absolute inset-y-0 left-0 rounded-[4px] bg-muted" style={{ width: `${(r.planned / max) * 100}%` }} aria-hidden />
+                  <span className="absolute inset-y-0 left-0 rounded-[4px] bg-series-1" style={{ width: `${(r.actual / max) * 100}%` }} aria-hidden />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <Empty>Noch nichts geplant oder gemessen – starte oben rechts den Fokus-Timer.</Empty>
+      )}
     </WidgetCard>
   );
 }
@@ -188,11 +230,22 @@ async function FlashcardsCard() {
 export default function LearnPage() {
   return (
     <div className="space-y-6">
-      <PageHeader title="Lernen" trailing={<SettingsLink className="desktop:hidden" />} />
+      <PageHeader
+        title="Lernen"
+        trailing={
+          <div className="flex items-center gap-2">
+            <FocusButton />
+            <SettingsLink className="desktop:hidden" />
+          </div>
+        }
+      />
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 md:items-start">
         <div className="space-y-6">
           <Suspense fallback={<WidgetSkeleton lines={4} />}>
             <TodayCard />
+          </Suspense>
+          <Suspense fallback={<WidgetSkeleton lines={4} />}>
+            <StudyTimeCard />
           </Suspense>
           <Suspense fallback={<WidgetSkeleton lines={4} />}>
             <PlansCard />

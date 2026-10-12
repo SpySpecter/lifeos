@@ -2,8 +2,9 @@ import "server-only";
 import { daysUntil } from "@/integrations/exams";
 import { plainRows, type DB } from "./db";
 import { env, isDemo } from "./env";
+import { focusMinutesBySubject } from "./focus";
 import { structuredCompletion } from "./openai";
-import { addDays, formatDayLong, weekdayShort } from "./time";
+import { addDays, formatDayLong, weekdayShort, zonedToEpoch } from "./time";
 
 /**
  * Lernen: Markdown-Material (vorher aus PDFs umgewandelt – das spart Token gegenüber PDFs), daraus
@@ -262,6 +263,45 @@ export function todaysSessions(db: DB, day: string): TodaySession[] {
     )
     .all(day, day, day, addDays(day, -OVERDUE_DAYS)) as (SessionRow & { plan_title: string })[];
   return rows.map((r) => ({ ...toSession(r), planTitle: r.plan_title, overdue: r.day < day }));
+}
+
+/** Montag bis Sonntag der Woche von `day`, als Tage und als ms-Grenzen in der App-Zeitzone. */
+export function weekRange(day: string, tz: string): { from: string; to: string; fromMs: number; toMs: number } {
+  const from = addDays(day, -((new Date(`${day}T12:00:00Z`).getUTCDay() + 6) % 7));
+  const to = addDays(from, 6);
+  return { from, to, fromMs: zonedToEpoch(from, "00:00", tz), toMs: zonedToEpoch(addDays(to, 1), "00:00", tz) };
+}
+
+/** 95 → „1 Std. 35 Min.“ */
+export function formatMinutes(min: number): string {
+  if (min < 60) return `${min} Min.`;
+  const h = Math.floor(min / 60);
+  return min % 60 ? `${h} Std. ${min % 60} Min.` : `${h} Std.`;
+}
+
+export type StudyTime = { subject: string; planned: number; actual: number };
+
+/**
+ * Plan gegen Ist für eine Woche: geplante Minuten aus den Lernplänen (nach Plantitel) und gemessene aus dem
+ * Fokus-Timer, zusammengeführt nach Fach (ohne Groß-/Kleinschreibung). `from`/`to` sind Tage, `fromMs`/`toMs` dieselben Grenzen in ms.
+ */
+export function studyTime(db: DB, range: { from: string; to: string; fromMs: number; toMs: number }): StudyTime[] {
+  const planned = db
+    .prepare(
+      "SELECT p.title AS subject, SUM(s.minutes) AS minutes FROM study_sessions s JOIN study_plans p ON p.id = s.plan_id " +
+        "WHERE s.day >= ? AND s.day <= ? GROUP BY lower(trim(p.title))",
+    )
+    .all(range.from, range.to) as { subject: string; minutes: number }[];
+  const out = new Map<string, StudyTime>();
+  const key = (s: string) => s.trim().toLowerCase();
+  for (const r of planned) out.set(key(r.subject), { subject: r.subject.trim(), planned: r.minutes, actual: 0 });
+  for (const [subject, minutes] of focusMinutesBySubject(db, range.fromMs, range.toMs)) {
+    const k = key(subject);
+    const cur = out.get(k);
+    if (cur) cur.actual += minutes;
+    else out.set(k, { subject: subject.trim(), planned: 0, actual: minutes });
+  }
+  return [...out.values()].sort((a, b) => Math.max(b.planned, b.actual) - Math.max(a.planned, a.actual) || a.subject.localeCompare(b.subject));
 }
 
 /** Offene Lernminuten für heute (inkl. Liegengebliebenem) – für die Briefing-Mitteilung. */

@@ -36,8 +36,10 @@ import {
   savePlan,
   setPlanArchived,
   StudyError,
+  todaysSessions,
   toggleSession,
 } from "@/lib/study";
+import { cancelFocus, finishFocus, knownSubjects, startFocus, updateFocus } from "@/lib/focus";
 
 const id = z.number().int().positive();
 const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -505,6 +507,46 @@ export async function reviewCardAction(cardId: number, rating: Rating): Promise<
   if (!card) return null;
   const { due, stability, difficulty, elapsedDays, scheduledDays, learningSteps, reps, lapses, state, lastReview } = card;
   return { due, stability, difficulty, elapsedDays, scheduledDays, learningSteps, reps, lapses, state, lastReview };
+}
+
+// ─── Fokus-Timer ─────────────────────────────────────────────────────────
+
+export type FocusOptions = { sessions: { id: number; subject: string; topic: string; minutes: number }[]; subjects: string[] };
+
+/** Auswahl im Timer: heutige Lerneinheiten und bekannte Fächer. */
+export async function focusOptionsAction(): Promise<FocusOptions> {
+  const sessions = todaysSessions(db(), today(env().APP_TZ))
+    .filter((s) => !s.done)
+    .map((s) => ({ id: s.id, subject: s.planTitle, topic: s.topic, minutes: s.minutes }));
+  return { sessions, subjects: knownSubjects(db()) };
+}
+
+const focusStart = z.object({
+  subject: z.string().trim().min(1).max(80),
+  studySessionId: id.nullable(),
+  kind: z.enum(["pomodoro", "frei"]),
+  endsAt: z.number().int().positive().nullable(),
+});
+
+export async function startFocusAction(input: z.input<typeof focusStart>): Promise<number> {
+  return startFocus(db(), focusStart.parse(input));
+}
+
+export async function updateFocusAction(focusId: number, phase: "work" | "break" | null, endsAt: number | null, minutes: number) {
+  updateFocus(db(), id.parse(focusId), {
+    phase: z.enum(["work", "break"]).nullable().parse(phase),
+    endsAt: z.number().int().positive().nullable().parse(endsAt),
+    minutes: z.number().min(0).max(24 * 60).parse(minutes),
+  });
+}
+
+export async function finishFocusAction(focusId: number, minutes: number, markDone: boolean) {
+  finishFocus(db(), id.parse(focusId), z.number().min(0).max(24 * 60).parse(minutes), z.boolean().parse(markDone));
+  revalidatePath("/", "layout");
+}
+
+export async function cancelFocusAction(focusId: number) {
+  cancelFocus(db(), id.parse(focusId));
 }
 
 /** Am Ende einer Sitzung: Zähler auf „Heute“ und im Lernen-Tab aktualisieren. */

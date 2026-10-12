@@ -3,6 +3,7 @@ import type { DB } from "./db";
 import { listHabits, type Habit } from "./habits";
 import { countSubscriptions, sendToAll, type PushMessage, type Sender } from "./push";
 import { runBriefing } from "./briefing";
+import { runFocusPushes } from "./focus";
 import { runOneOffReminders } from "./one-off-reminders";
 import { localClock } from "./time";
 
@@ -74,6 +75,11 @@ export function startReminderLoop(getDb: () => DB, tz: string): void {
       await runOneOffReminders(getDb(), new Date(), tz);
     } catch (err) {
       console.error("[reminders] einmalig:", (err as Error).message);
+    }
+    try {
+      await runFocusPushes(getDb(), Date.now());
+    } catch (err) {
+      console.error("[fokus]", (err as Error).message);
     } finally {
       running = false;
     }
