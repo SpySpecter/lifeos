@@ -1,11 +1,12 @@
 "use client";
 
 import { Archive, BellRing, Pencil, Plus, Trash2 } from "lucide-react";
-import { useActionState, useEffect, useState, useTransition } from "react";
-import { addHabitAction, archiveHabitAction, deleteHabitAction, updateHabitAction, type FormState } from "@/app/actions";
+import { useActionState, useEffect, useOptimistic, useState, useTransition, type ReactNode } from "react";
+import { addHabitAction, archiveHabitAction, deleteHabitAction, reorderHabitsAction, updateHabitAction, type FormState } from "@/app/actions";
 import { haptic } from "@/lib/haptics";
 import { cn } from "@/lib/utils";
 import { HabitFields, type HabitDraft } from "./habit-fields";
+import { SortableList } from "./ios/sortable-list";
 import { SwipeRow } from "./ios/swipe-row";
 import { Button } from "./ui/button";
 
@@ -66,7 +67,7 @@ export function HabitForm() {
  * Zeile in „Verwalten“: Quote der letzten 30 Tage. Nach links wischen deckt Bearbeiten, Archivieren und Löschen auf;
  * der Stift öffnet das Formular (dort stehen dieselben Aktionen – auch für VoiceOver und Tastatur).
  */
-export function HabitManageRow({ habit, rate }: { habit: HabitDraft & { id: number }; rate: number }) {
+export function HabitManageRow({ habit, rate, handle }: { habit: HabitDraft & { id: number }; rate: number; handle?: ReactNode }) {
   const [editing, setEditing] = useState(false);
   const [, start] = useTransition();
   const archive = () => start(() => archiveHabitAction(habit.id));
@@ -74,7 +75,7 @@ export function HabitManageRow({ habit, rate }: { habit: HabitDraft & { id: numb
     if (confirm(`„${habit.name}“ endgültig löschen? Der Verlauf wird mitgelöscht.`)) start(() => deleteHabitAction(habit.id));
   };
   return (
-    <li className="-mx-4">
+    <>
       <SwipeRow
         trailing={[
           { label: "Bearbeiten", icon: Pencil, tone: "bg-muted-foreground", onAction: () => setEditing(true) },
@@ -111,6 +112,7 @@ export function HabitManageRow({ habit, rate }: { habit: HabitDraft & { id: numb
           >
             <Pencil className="size-[1.125rem]" aria-hidden />
           </button>
+          {handle}
         </div>
       </SwipeRow>
       {editing ? (
@@ -118,7 +120,33 @@ export function HabitManageRow({ habit, rate }: { habit: HabitDraft & { id: numb
           <HabitEditForm habit={habit} onDone={() => setEditing(false)} onArchive={archive} onDelete={remove} />
         </div>
       ) : null}
-    </li>
+    </>
+  );
+}
+
+type ManagedHabit = HabitDraft & { id: number; rate: number };
+
+/** „Verwalten“: Zeilen am Griff umsortieren; die neue Reihenfolge gilt sofort (optimistisch) und überall. */
+export function HabitManageList({ habits }: { habits: ManagedHabit[] }) {
+  const [, start] = useTransition();
+  const [current, apply] = useOptimistic(habits, (_: ManagedHabit[], next: ManagedHabit[]) => next);
+  return (
+    <SortableList
+      aria-label="Gewohnheiten"
+      className="-my-2 ios-inset-rows [--inset:52px]"
+      items={current}
+      getKey={(h) => h.id}
+      itemLabel={(h) => h.name}
+      onReorder={(next) =>
+        start(async () => {
+          apply(next);
+          await reorderHabitsAction(next.map((h) => h.id));
+        })
+      }
+      renderRow={(h, handle) => (
+        <HabitManageRow habit={{ id: h.id, name: h.name, emoji: h.emoji, remindAt: h.remindAt }} rate={h.rate} handle={handle} />
+      )}
+    />
   );
 }
 

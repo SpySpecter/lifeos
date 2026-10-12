@@ -78,6 +78,26 @@ export function updateHabit(db: DB, habitId: number, h: { name: string; emoji: s
   if (before && before.remindAt !== h.remindAt) db.prepare("DELETE FROM habit_reminders_sent WHERE habit_id = ?").run(habitId);
 }
 
+/**
+ * Neue Reihenfolge der aktiven Gewohnheiten. Unbekannte oder archivierte IDs werden ignoriert;
+ * aktive, die in `ids` fehlen, rutschen in ihrer bisherigen Reihenfolge ans Ende.
+ */
+export function reorderHabits(db: DB, ids: number[]): void {
+  const active = (db.prepare("SELECT id FROM habits WHERE archived = 0 ORDER BY position, id").all() as { id: number }[]).map((r) => r.id);
+  const known = new Set(active);
+  const ordered = [...new Set(ids.filter((id) => known.has(id)))];
+  const rest = active.filter((id) => !ordered.includes(id));
+  const set = db.prepare("UPDATE habits SET position = ? WHERE id = ?");
+  db.exec("BEGIN");
+  try {
+    [...ordered, ...rest].forEach((id, i) => set.run(i, id));
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
+
 export function archiveHabit(db: DB, habitId: number): void {
   db.prepare("UPDATE habits SET archived = 1 WHERE id = ?").run(habitId);
 }

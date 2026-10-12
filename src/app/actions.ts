@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { env } from "@/lib/env";
 import { normalizeLayout } from "@/lib/dashboard";
 import { isSingleEmoji, suggestEmoji } from "@/lib/emoji";
-import { addHabit, archiveHabit, deleteHabit, restoreHabit, toggleHabit, updateHabit } from "@/lib/habits";
+import { addHabit, archiveHabit, deleteHabit, reorderHabits, restoreHabit, toggleHabit, updateHabit } from "@/lib/habits";
 import { deleteSubscription, saveSubscription, sendToAll } from "@/lib/push";
 import { METRIC_KEYS, parseLooseNumber, upsertHealth, type HealthValues } from "@/lib/health";
 import { today } from "@/lib/time";
@@ -68,6 +68,11 @@ export async function updateHabitAction(_prev: FormState, formData: FormData): P
   updateHabit(db(), habitId.data, p.habit);
   revalidatePath("/", "layout");
   return { ok: true, message: "Gespeichert" };
+}
+
+export async function reorderHabitsAction(ids: number[]) {
+  reorderHabits(db(), z.array(id).max(200).parse(ids));
+  revalidatePath("/", "layout");
 }
 
 export async function archiveHabitAction(habitId: number) {

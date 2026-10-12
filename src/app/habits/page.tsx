@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { HabitActionButton } from "@/components/habit-actions";
-import { HabitForm, HabitManageRow } from "@/components/habit-form";
+import { HabitForm, HabitManageList } from "@/components/habit-form";
 import { HabitList } from "@/components/habit-list";
 import { Heatmap } from "@/components/heatmap";
 import { SettingsLink } from "@/components/nav";
@@ -60,16 +60,19 @@ async function HabitsContent() {
 
       <div className="space-y-6">
         {habits.length ? (
-          <WidgetCard title="Verwalten" footer="Nach links wischen für Bearbeiten, Archivieren und Löschen. Balken: erledigt an den letzten 30 Tagen.">
-            <ul className="-my-2 ios-inset-rows [--inset:52px]">
-              {habits.map((h) => (
-                <HabitManageRow
-                  key={h.id}
-                  habit={{ id: h.id, name: h.name, emoji: h.emoji, remindAt: h.remindAt }}
-                  rate={h.history.filter((d) => d.done).length / h.history.length}
-                />
-              ))}
-            </ul>
+          <WidgetCard
+            title="Verwalten"
+            footer="Am Griff ziehen zum Sortieren, nach links wischen für Bearbeiten, Archivieren und Löschen. Balken: erledigt an den letzten 30 Tagen."
+          >
+            <HabitManageList
+              habits={habits.map((h) => ({
+                id: h.id,
+                name: h.name,
+                emoji: h.emoji,
+                remindAt: h.remindAt,
+                rate: h.history.filter((d) => d.done).length / h.history.length,
+              }))}
+            />
           </WidgetCard>
         ) : null}
 

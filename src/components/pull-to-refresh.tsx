@@ -25,7 +25,9 @@ export function PullToRefresh() {
 
     let current = 0;
     const onStart = (e: TouchEvent) => {
-      startY.current = window.scrollY <= 0 ? e.touches[0].clientY : null;
+      // Ziehgriffe (Sortieren) haben eigene vertikale Gesten
+      const own = e.target instanceof Element && e.target.closest("[data-no-pull]");
+      startY.current = window.scrollY <= 0 && !own ? e.touches[0].clientY : null;
     };
     const onMove = (e: TouchEvent) => {
       if (startY.current === null) return;
