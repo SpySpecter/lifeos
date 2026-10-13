@@ -37,3 +37,14 @@ export async function cached<T>(
 export function invalidate(db: DB, prefix: string): void {
   db.prepare("DELETE FROM cache WHERE key LIKE ?").run(`${prefix}%`);
 }
+
+/** Wie lange abgelaufene Einträge noch als Notfall-Rückfall (`stale`) dienen, bevor sie gelöscht werden. */
+export const STALE_KEEP_MS = 14 * 86_400_000;
+
+/**
+ * Löscht Einträge, die seit mehr als `STALE_KEEP_MS` abgelaufen sind – sonst wächst die Tabelle ewig
+ * (z. B. eine `ogimg:`-Zeile pro News-Artikel). Gibt die Zahl gelöschter Zeilen zurück.
+ */
+export function pruneCache(db: DB, now: number = Date.now()): number {
+  return Number(db.prepare("DELETE FROM cache WHERE expires_at < ?").run(now - STALE_KEEP_MS).changes);
+}
