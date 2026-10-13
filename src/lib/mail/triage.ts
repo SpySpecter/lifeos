@@ -123,7 +123,10 @@ async function execute(token: string, labels: Map<Category, string>, id: string,
 /** Rechnungen/Bestellungen, die schon länger im Posteingang liegen, mit Label ins Archiv verschieben. */
 async function archiveOldFinance(db: DB, account: string, token: string): Promise<number> {
   const rows = db
-    .prepare("SELECT id, subject, snippet, date FROM mail_items WHERE account = ? AND status = 'done' AND action = 'keep' AND category = 'finanzen'")
+    // ausdrücklich behaltene Mails (source = 'nutzer') bleiben, wo sie sind
+    .prepare(
+      "SELECT id, subject, snippet, date FROM mail_items WHERE account = ? AND status = 'done' AND action = 'keep' AND category = 'finanzen' AND source != 'nutzer'",
+    )
     .all(account) as { id: string; subject: string; snippet: string; date: number }[];
   const due = rows.filter((r) => financeReadyToArchive(r)).map((r) => r.id);
   if (!due.length) return 0;
@@ -135,10 +138,25 @@ async function archiveOldFinance(db: DB, account: string, token: string): Promis
   return due.length;
 }
 
-async function executeGroup(token: string, labels: Map<Category, string>, ids: string[], action: MailAction, category: Category | null) {
+/**
+ * Führt eine Gruppe aus und meldet jede fertige Mail sofort über `done` – bricht der Papierkorb mittendrin ab,
+ * sind die schon gelöschten trotzdem protokolliert (und damit rückgängig zu machen).
+ */
+async function executeGroup(
+  token: string,
+  labels: Map<Category, string>,
+  ids: string[],
+  action: MailAction,
+  category: Category | null,
+  done: (id: string) => void,
+) {
   const label = category ? labels.get(category) : undefined;
   await modify(token, ids, label ? [label] : [], action === "archive" ? ["INBOX"] : []);
-  if (action === "trash") for (const id of ids) await trash(token, id);
+  if (action !== "trash") return ids.forEach(done);
+  for (const id of ids) {
+    await trash(token, id);
+    done(id);
+  }
 }
 
 /** Startet einen Lauf in mail_runs – oder bricht ab, wenn gerade ein anderer läuft. */
@@ -220,10 +238,17 @@ export async function runTriage(db: DB, trigger: "timer" | "manuell"): Promise<R
         continue;
       }
 
+      // Einzelne Fehler (z. B. Mail inzwischen am Handy gelöscht → 404) überspringen statt den Lauf abzubrechen;
+      // nicht Erfasste kommen beim nächsten Lauf wieder dran
       const metas: MailMeta[] = [];
+      let metaFailed = 0;
       for (let i = 0; i < fresh.length; i += 10) {
-        metas.push(...(await Promise.all(fresh.slice(i, i + 10).map((id) => getMeta(token, id)))));
+        for (const r of await Promise.allSettled(fresh.slice(i, i + 10).map((id) => getMeta(token, id)))) {
+          if (r.status === "fulfilled") metas.push(r.value);
+          else metaFailed++;
+        }
       }
+      if (metaFailed) summary.notes.push(`${account}: ${metaFailed} Mail${metaFailed === 1 ? "" : "s"} nicht lesbar – beim nächsten Lauf erneut`);
       summary.scanned += metas.length;
 
       const decisions = new Map<string, Decision>();
@@ -280,15 +305,17 @@ export async function runTriage(db: DB, trigger: "timer" | "manuell"): Promise<R
         groups.get(key)!.mails.push(m);
       }
       for (const g of groups.values()) {
+        const byId = new Map(g.mails.map((m) => [m.id, m]));
+        let finished = 0;
         try {
-          await executeGroup(token, labels, g.mails.map((m) => m.id), g.action, g.category);
-          for (const m of g.mails) {
-            const d = decisions.get(m.id)!;
-            record(db, account, m, d);
+          await executeGroup(token, labels, [...byId.keys()], g.action, g.category, (id) => {
+            const d = decisions.get(id)!;
+            record(db, account, byId.get(id)!, d);
             count(d, 1);
-          }
+            finished++;
+          });
         } catch (err) {
-          summary.notes.push(`${g.mails.length}× ${g.action}/${g.category ?? "-"} nicht ausgeführt: ${(err as Error).message}`);
+          summary.notes.push(`${g.mails.length - finished}× ${g.action}/${g.category ?? "-"} nicht ausgeführt: ${(err as Error).message}`);
         }
       }
       // erst nach dem Einordnen: so werden auch gerade erkannte ältere Rechnungen sofort archiviert
