@@ -173,7 +173,7 @@ async function ReviewContent({ searchParams }: { searchParams: Promise<Record<st
           ) : null}
         </div>
         <div className="space-y-6">
-          <WidgetCard title="Lernzeit pro Fach" href="/lernen" hrefLabel="Lernen" footer={r.study.length ? "Graue Spur: geplant · Balken: mit dem Fokus-Timer gemessen." : undefined}>
+          <WidgetCard title="Lernzeit pro Fach" href="/lernen" hrefLabel="Lernen" footer={r.study.length ? "Balken: mit dem Fokus-Timer gemessen · grau: laut Lernplan geplant." : undefined}>
             {r.study.length ? <StudyBars rows={r.study} /> : <p className="text-subhead text-muted-foreground">Nichts geplant oder gemessen.</p>}
           </WidgetCard>
           <WidgetCard title="Noten" href="/noten" hrefLabel="Alle">

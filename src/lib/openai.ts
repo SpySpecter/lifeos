@@ -1,6 +1,7 @@
 import "server-only";
 import type { DB } from "./db";
 import { env } from "./env";
+import { today, zonedToEpoch } from "./time";
 
 /** USD pro 1 Mio. Token [Eingabe, Ausgabe]. Unbekannte Modelle werden bewusst teuer geschätzt. */
 const PRICES: Record<string, [number, number]> = {
@@ -15,7 +16,9 @@ export function costUsd(model: string, input: number, output: number): number {
 }
 
 export function monthSpendUsd(db: DB, now = new Date()): number {
-  const start = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+  // Monatsanfang in der App-Zeitzone, unabhängig von der Zeitzone des Servers
+  const tz = env().APP_TZ;
+  const start = zonedToEpoch(`${today(tz, now).slice(0, 7)}-01`, "00:00", tz);
   const row = db.prepare("SELECT COALESCE(SUM(cost_usd), 0) AS usd FROM llm_usage WHERE at >= ?").get(start) as { usd: number };
   return row.usd;
 }

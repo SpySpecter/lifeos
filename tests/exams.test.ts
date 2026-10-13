@@ -73,8 +73,8 @@ describe("Heute-Kacheln", () => {
   });
 
   it("Ausfälle heute und morgen", () => {
-    expect(changesTile(w, "2026-10-12")).toEqual({ label: "Ausfälle", value: "2", caption: "Politische Bildung entfällt heute · +1", tone: "warning" });
-    expect(changesTile(w, "2026-10-11").caption).toBe("Politische Bildung entfällt morgen · +1");
+    expect(changesTile(w, "2026-10-12")).toEqual({ label: "Ausfälle", value: "2", caption: "Politische Bildung entfällt heute · 1 weitere", tone: "warning" });
+    expect(changesTile(w, "2026-10-11").caption).toBe("Politische Bildung entfällt morgen · 1 weitere");
     expect(changesTile(w, "2026-10-13")).toMatchObject({ value: "0", tone: "normal" });
   });
 

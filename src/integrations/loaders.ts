@@ -6,7 +6,7 @@ import { db } from "@/lib/db";
 import { env, isDemo } from "@/lib/env";
 import { mailAssistantData, type MailAssistantData } from "@/lib/mail/triage";
 import { getSettings } from "@/lib/settings";
-import { dayEnd, listDecks } from "@/lib/flashcards";
+import { dayEnd, listDecks, newCardsLeft } from "@/lib/flashcards";
 import { listGradeCourses, projection } from "@/lib/grades";
 import { listHabits } from "@/lib/habits";
 import { healthSeries } from "@/lib/health";
@@ -51,16 +51,17 @@ export const loadHealth = cache(async (days: number) => {
   return { days: range, series: healthSeries(db(), range) };
 });
 
-/** Jetzt und Ende des Tages – „fällig“ heißt bei Karteikarten: bis heute Abend dran. */
+/** Jetzt, Ende des Tages und wie viele neue Karten heute noch dürfen – „fällig“ heißt: bis heute Abend dran. */
 export const cardWindow = cache(async () => {
   await connection();
   const now = Date.now();
-  return { now, end: dayEnd(now, env().APP_TZ) };
+  const tz = env().APP_TZ;
+  return { now, end: dayEnd(now, tz), newLeft: newCardsLeft(db(), now, tz, (await loadSettings()).newCardsPerDay) };
 });
 
 export const loadDecks = cache(async () => {
-  const { now, end } = await cardWindow();
-  return listDecks(db(), now, end);
+  const { now, end, newLeft } = await cardWindow();
+  return listDecks(db(), now, end, newLeft);
 });
 
 export const loadGrades = cache(async () => {

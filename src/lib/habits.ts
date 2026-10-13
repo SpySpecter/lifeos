@@ -125,7 +125,8 @@ function checksByHabit(db: DB, from: string, to: string): Map<number, string[]> 
 export function listHabits(db: DB, day: string, historyDays = 7): Habit[] {
   const habits = db.prepare(`${HABIT_SELECT} WHERE archived = 0 ORDER BY position, id`).all() as HabitRow[];
   if (!habits.length) return [];
-  const byHabit = checksByHabit(db, addDays(day, -400), day);
+  // alle Häkchen bis heute: Serien sollen nicht nach einem Jahr stehen bleiben (eine Zeile pro Häkchen, bleibt klein)
+  const byHabit = checksByHabit(db, "0000-01-01", day);
   const window = lastDays(day, historyDays);
   return habits.map((h) => {
     const checks = byHabit.get(h.id) ?? [];
@@ -146,7 +147,7 @@ export function listHabits(db: DB, day: string, historyDays = 7): Habit[] {
 export function habitCoverage(db: DB, days: string[]): (Rhythm & { id: number; name: string; emoji: string; covered: number; streak: number; streakUnit: string })[] {
   const last = days[days.length - 1];
   const habits = db.prepare(`${HABIT_SELECT} WHERE archived = 0 ORDER BY position, id`).all() as HabitRow[];
-  const byHabit = checksByHabit(db, addDays(days[0], -400), last);
+  const byHabit = checksByHabit(db, "0000-01-01", last);
   return habits.map((h) => {
     const checks = byHabit.get(h.id) ?? [];
     const rhythm = { cadence: h.cadence, intervalDays: h.intervalDays };
@@ -269,7 +270,8 @@ export function listArchivedHabits(db: DB): { id: number; name: string; emoji: s
 export function habitHeatmap(db: DB, day: string, days: number): { day: string; count: number; total: number }[] {
   const habits = db.prepare(`${HABIT_SELECT} WHERE archived = 0`).all() as HabitRow[];
   const range = lastDays(day, days);
-  const byHabit = checksByHabit(db, addDays(range[0], -40), day);
+  // so weit zurück, dass auch „alle 365 Tage“ und ein Monat vor dem Fenster mitzählen
+  const byHabit = checksByHabit(db, addDays(range[0], -366), day);
   const counts = new Map<string, number>();
   for (const h of habits) {
     for (const d of coveredDays(h, byHabit.get(h.id) ?? [], range)) counts.set(d, (counts.get(d) ?? 0) + 1);

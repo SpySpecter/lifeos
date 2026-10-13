@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { cached, invalidate } from "@/lib/cache";
+import { cached, invalidate, pruneCache, STALE_KEEP_MS } from "@/lib/cache";
 import { memoryDb } from "./support/db";
 
 describe("cached", () => {
@@ -39,5 +39,15 @@ describe("cached", () => {
     await cached(db, "news:default", 60, fn, 1);
     await cached(db, "github:default", 60, fn, 1);
     expect(fn).toHaveBeenCalledTimes(1);
+  });
+
+  it("pruneCache löscht nur lange abgelaufene Einträge und behält den Rückfall", async () => {
+    const db = memoryDb();
+    await cached(db, "alt", 60, async () => 1, 0);
+    await cached(db, "frisch-abgelaufen", 60, async () => 1, STALE_KEEP_MS);
+    await cached(db, "gültig", 60, async () => 1, STALE_KEEP_MS + 61_000);
+    expect(pruneCache(db, STALE_KEEP_MS + 61_000)).toBe(1);
+    const keys = (db.prepare("SELECT key FROM cache ORDER BY key").all() as { key: string }[]).map((r) => r.key);
+    expect(keys).toEqual(["frisch-abgelaufen", "gültig"]);
   });
 });

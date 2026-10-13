@@ -22,12 +22,13 @@ describe("KI-Kosten", () => {
     expect(costUsd("gpt-6-luna", 1_000_000, 1_000_000)).toBeCloseTo(0.6);
     expect(costUsd("unbekannt", 1_000_000, 0)).toBeGreaterThan(1);
   });
-  it("summiert nur den laufenden Monat", () => {
+  it("summiert nur den laufenden Monat (Monatsgrenze in APP_TZ, unabhängig von der Server-Zeitzone)", () => {
     const db = memoryDb();
     const ins = db.prepare("INSERT INTO llm_usage (at, model, purpose, input_tokens, output_tokens, cost_usd) VALUES (?, 'm', 'p', 0, 0, ?)");
-    const now = new Date("2026-10-15T12:00:00");
-    ins.run(new Date("2026-10-02T00:00:00").getTime(), 0.25);
-    ins.run(new Date("2026-09-30T23:00:00").getTime(), 5);
-    expect(monthSpendUsd(db, now)).toBeCloseTo(0.25);
+    const now = new Date("2026-10-15T12:00:00+02:00");
+    ins.run(Date.parse("2026-10-02T00:00:00+02:00"), 0.25);
+    ins.run(Date.parse("2026-10-01T00:30:00+02:00"), 0.5); // in UTC noch September, in Berlin schon Oktober
+    ins.run(Date.parse("2026-09-30T23:00:00+02:00"), 5);
+    expect(monthSpendUsd(db, now)).toBeCloseTo(0.75);
   });
 });

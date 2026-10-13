@@ -5,7 +5,8 @@ import { connection } from "next/server";
 import type { ReactNode } from "react";
 import { Suspense } from "react";
 import { DisconnectButton } from "@/components/disconnect-button";
-import { BriefingForm, ClearInboxForm, MailProfileForm, ProfileForm, RuleForm, RuleList, WeeklyReviewForm } from "@/components/settings-forms";
+import { MailAppPicker } from "@/components/mail-link";
+import { BriefingForm, ClearInboxForm, MailProfileForm, NewCardsForm, ProfileForm, RuleForm, RuleList, WeeklyReviewForm } from "@/components/settings-forms";
 import { googleAccounts, missingFeatures } from "@/integrations/google";
 import { db, plainRows } from "@/lib/db";
 import { monthSpendUsd } from "@/lib/openai";
@@ -150,6 +151,16 @@ async function SettingsContent({ searchParams }: { searchParams: Promise<Record<
         <WeeklyReviewForm review={settings.weeklyReview} />
       </Row>
 
+      <Row
+        id="karteikarten"
+        title="Karteikarten"
+        description="Neue Karten kommen gestaffelt dazu, damit ein großer KI-Stapel nicht auf einmal fällig wird und sich die Wiederholungen der nächsten Tage nicht stauen. Quick Learn ist davon ausgenommen."
+        state="ok"
+        status={`${settings.newCardsPerDay} neue pro Tag`}
+      >
+        <NewCardsForm perDay={settings.newCardsPerDay} />
+      </Row>
+
       <Row id="untis" title="Schule (WebUntis)" description="Stundenplan, Ausfälle und Vertretungen der nächsten 7 Tage." state={uState} status={uStatus}>
         {uState !== "ok" ? <p>In der <Code>.env</Code> eintragen: <Code>UNTIS_SERVER</Code>, <Code>UNTIS_SCHOOL</Code>, <Code>UNTIS_USER</Code>, <Code>UNTIS_PASSWORD</Code>.</p> : null}
       </Row>
@@ -176,6 +187,15 @@ async function SettingsContent({ searchParams }: { searchParams: Promise<Record<
               </li>
             ))}
           </ul>
+        ) : null}
+        {accounts.length || demo ? (
+          <div className="space-y-1.5">
+            <h3 className="font-semibold">Mails öffnen in</h3>
+            <MailAppPicker value={settings.mailApp} />
+            <p className="text-footnote text-muted-foreground">
+              Gilt auf iPhone und iPad. Apple Mail springt direkt zur Mail, wenn das Konto dort eingerichtet ist; die Gmail-App öffnet nur den Posteingang (Google bietet keinen Link auf einzelne Mails).
+            </p>
+          </div>
         ) : null}
         {accounts.length || demo ? (
           <Link href="/drive" className="flex min-h-11 items-center justify-between rounded-[14px] bg-muted px-3 font-semibold text-tint-text active:opacity-60">

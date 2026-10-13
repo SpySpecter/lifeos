@@ -16,6 +16,12 @@ describe("checkAccess", () => {
     expect(checkAccess("/api/health", null, strict).allowed).toBe(true);
     expect(checkAccess("/api/healthz", null, strict).allowed).toBe(false);
   });
+  it("gibt nur die echten Icons frei, keine Routen, die mit /icon beginnen", () => {
+    expect(checkAccess("/icon.svg", null, strict).allowed).toBe(true);
+    expect(checkAccess("/apple-icon", null, strict).allowed).toBe(true);
+    expect(checkAccess("/icons-admin", null, strict).allowed).toBe(false);
+    expect(checkAccess("/apple-icon/../settings", null, strict).allowed).toBe(false);
+  });
   it("erlaubt jeden Tailnet-Nutzer bei leerer Allowlist", () => {
     expect(checkAccess("/", "x@github", { ...strict, allowedUsers: [] }).allowed).toBe(true);
   });

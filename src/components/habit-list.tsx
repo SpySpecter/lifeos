@@ -71,7 +71,7 @@ export function HabitList({ habits, compact = false }: { habits: Habit[]; compac
                 {h.emoji}
               </span>
               <span className="min-w-0 flex-1">
-                <span className={cn("block truncate text-body", h.done && "text-muted-foreground")}>{h.name}</span>
+                <span className={cn("line-clamp-2 text-body break-words", h.done && "text-muted-foreground")}>{h.name}</span>
                 {h.status ? (
                   <span className={cn("block truncate text-footnote text-muted-foreground", !h.done && /fällig|nur noch/.test(h.status) && "text-warning")}>
                     {h.status}

@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
-import { extractOgImage, fetchableArticle, markLocal, mergeNews, parseFeed, safeImageUrl } from "@/integrations/news";
+import { describe, expect, it, vi } from "vitest";
+import { extractOgImage, fetchArticle, fetchableArticle, markLocal, mergeNews, parseFeed, safeImageUrl } from "@/integrations/news";
 
 const fixture = (name: string) => readFileSync(path.join(__dirname, "fixtures", name), "utf8");
 
@@ -120,5 +120,26 @@ describe("Vorschaubilder", () => {
     expect(fetchableArticle("https://localhost/a")).toBe(false);
     expect(fetchableArticle("https://lifeos.taila65db2.ts.net/")).toBe(false);
     expect(fetchableArticle("#")).toBe(false);
+  });
+
+  it("folgt keinen Weiterleitungen auf interne Adressen", async () => {
+    const seen: string[] = [];
+    const redirect = (to: string) => new Response(null, { status: 302, headers: { location: to } });
+    vi.stubGlobal("fetch", async (url: string, init: RequestInit) => {
+      seen.push(url);
+      expect(init.redirect).toBe("manual");
+      if (url.includes("evil")) return redirect("http://169.254.169.254/latest/meta-data/");
+      if (url.endsWith("short.example.org/x")) return redirect("/artikel/1");
+      return new Response("<head></head>", { status: 200 });
+    });
+    try {
+      expect(await fetchArticle("https://evil.example.org/a")).toBeNull();
+      expect(seen).toEqual(["https://evil.example.org/a"]);
+      const ok = await fetchArticle("https://short.example.org/x");
+      expect(ok?.status).toBe(200);
+      expect(seen.at(-1)).toBe("https://short.example.org/artikel/1");
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

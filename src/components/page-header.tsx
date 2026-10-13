@@ -46,22 +46,23 @@ export function PageHeader({
           collapsed && "pointer-events-auto border-border bg-bar backdrop-blur-xl backdrop-saturate-150",
         )}
       >
-        <div className="relative flex h-11 items-center justify-center px-24">
-          {back ? (
-            <Link href={back.href} className={cn("absolute top-0 left-1 flex h-11 max-w-23 items-center text-body text-tint-text opacity-0 transition-opacity", collapsed && "opacity-100")} inert={!collapsed}>
-              <ChevronLeft className="size-6 shrink-0" aria-hidden />
-              {/* wie iOS: passt der Titel der Vorseite nicht neben den Titel, heißt der Knopf „Zurück“ */}
-              <span className="truncate">{back.label.length > 8 ? "Zurück" : back.label}</span>
-            </Link>
-          ) : null}
-          <span className={cn("truncate text-body font-semibold opacity-0 transition-opacity duration-200", collapsed && "opacity-100")}>
+        {/* drei Spalten: die Seiten wachsen mit ihrem Inhalt (z. B. „Fokus“ + Zahnrad), der Titel bleibt mittig und kürzt sich statt zu überlappen */}
+        <div className="grid h-11 grid-cols-[minmax(max-content,1fr)_minmax(0,auto)_minmax(max-content,1fr)] items-center gap-2 px-1">
+          <div className="flex min-w-0">
+            {back ? (
+              <Link href={back.href} className={cn("flex h-11 max-w-23 items-center text-body text-tint-text opacity-0 transition-opacity", collapsed && "opacity-100")} inert={!collapsed}>
+                <ChevronLeft className="size-6 shrink-0" aria-hidden />
+                {/* wie iOS: passt der Titel der Vorseite nicht neben den Titel, heißt der Knopf „Zurück“ */}
+                <span className="truncate">{back.label.length > 8 ? "Zurück" : back.label}</span>
+              </Link>
+            ) : null}
+          </div>
+          <span className={cn("truncate text-center text-body font-semibold opacity-0 transition-opacity duration-200", collapsed && "opacity-100")}>
             {children ?? title}
           </span>
-          {trailing ? (
-            <div className={cn("absolute top-0 right-2 flex h-11 items-center opacity-0 transition-opacity", collapsed && "opacity-100")} inert={!collapsed}>
-              {trailing}
-            </div>
-          ) : null}
+          <div className={cn("flex h-11 items-center justify-end pr-1 opacity-0 transition-opacity", collapsed && "opacity-100")} inert={!collapsed}>
+            {trailing}
+          </div>
         </div>
       </div>
 

@@ -20,6 +20,7 @@ import { isDemo } from "@/lib/env";
 import { clearInbox, decideMail, runTriage, undoMail, upsertRule } from "@/lib/mail/triage";
 import { decideDriveItem, markDriveItem, startDriveCleanup, undoDriveItem } from "@/lib/drive/cleanup";
 import { CATEGORIES } from "@/lib/mail/policy";
+import { MAIL_APPS } from "@/lib/mail/links";
 import { getSettings, setSetting } from "@/lib/settings";
 import { getOrCreateBriefing } from "@/lib/briefing";
 import { getOrCreateReview } from "@/lib/weekly-review";
@@ -242,6 +243,12 @@ export async function addMailRuleAction(_prev: FormState, formData: FormData): P
   return { ok: true, message: "Regel gespeichert" };
 }
 
+/** Wohin ein Tipp auf eine Mail führt: Apple Mail, Gmail-App oder Browser. */
+export async function setMailAppAction(value: string) {
+  setSetting(db(), "mailApp", z.enum(MAIL_APPS).parse(value));
+  revalidatePath("/", "layout");
+}
+
 // ─── Persönliche Einstellungen ─────────────────────────────────────────
 
 const profileSchema = z.object({
@@ -293,6 +300,14 @@ export async function saveWeeklyReviewSettingsAction(_prev: FormState, formData:
   setSetting(db(), "weeklyReview", parsed.data);
   revalidatePath("/settings");
   return { ok: true, message: parsed.data.enabled ? `Gespeichert – kommt sonntags um ${parsed.data.time}` : "Gespeichert – Push aus" };
+}
+
+export async function saveNewCardsAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const parsed = z.coerce.number().int().min(1, "Mindestens 1").max(500, "Höchstens 500").safeParse(formData.get("perDay"));
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
+  setSetting(db(), "newCardsPerDay", parsed.data);
+  revalidatePath("/", "layout");
+  return { ok: true, message: `Gespeichert – bis zu ${parsed.data} neue Karten am Tag` };
 }
 
 /** Rückblick einer Woche neu bauen (frische Zahlen, neuer KI-Kommentar). */

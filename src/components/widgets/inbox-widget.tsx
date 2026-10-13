@@ -1,7 +1,10 @@
 import { File, FileSpreadsheet, FileText, Presentation } from "lucide-react";
 import Link from "next/link";
 import { loadGoogle } from "@/integrations/loaders";
+import { db } from "@/lib/db";
+import { getSettings } from "@/lib/settings";
 import { relativeTime } from "@/lib/time";
+import { MailLink } from "../mail-link";
 import { RefreshButton } from "../refresh-button";
 import { ResultView, WidgetCard } from "../widget-card";
 
@@ -21,6 +24,7 @@ function accountLabel(email: string, all: string[]): string {
 
 export async function InboxWidget({ className }: { className?: string }) {
   const result = await loadGoogle();
+  const mailApp = getSettings(db()).mailApp;
   return (
     <WidgetCard title="Posteingang" className={className} action={<RefreshButton integration="google" />}>
       <ResultView result={result} integration="google">
@@ -52,7 +56,7 @@ export async function InboxWidget({ className }: { className?: string }) {
                 <ul className="space-y-2.5 text-subhead">
                   {latest.map((m) => (
                     <li key={m.account + m.id} className="min-w-0">
-                      <a {...link(m.url)} className="group block">
+                      <MailLink webUrl={m.url} messageId={m.messageId} app={mailApp} className="group block">
                         <p className="flex items-baseline gap-2">
                           <span className="truncate font-semibold group-active:opacity-70">{m.from}</span>
                           <span className="ml-auto shrink-0 text-footnote text-muted-foreground">{relativeTime(m.date)}</span>
@@ -61,7 +65,7 @@ export async function InboxWidget({ className }: { className?: string }) {
                           {multi ? <span className="text-footnote">{short(m.account)} · </span> : null}
                           {m.subject}
                         </p>
-                      </a>
+                      </MailLink>
                     </li>
                   ))}
                 </ul>

@@ -7,6 +7,7 @@ import { runWeeklyReview } from "./weekly-review";
 import { runFocusPushes } from "./focus";
 import { runOneOffReminders } from "./one-off-reminders";
 import { localClock } from "./time";
+import { pruneCache } from "./cache";
 
 /**
  * Habit-Erinnerungen: Jede Minute prüfen, welche Gewohnheit ihre Uhrzeit erreicht hat und heute noch offen ist.
@@ -87,6 +88,14 @@ export function startReminderLoop(getDb: () => DB, tz: string): void {
     // eigener Ablauf: die KI-Zusammenfassung darf die Habit-Erinnerungen nicht aufhalten (doppelt sendet claimPush nie)
     runBriefing(getDb(), new Date(), tz).catch((err) => console.error("[briefing]", (err as Error).message));
     runWeeklyReview(getDb(), new Date(), tz).catch((err) => console.error("[rückblick]", (err as Error).message));
+    // einmal pro Stunde alte Cache-Zeilen wegräumen
+    if (new Date().getMinutes() === 17) {
+      try {
+        pruneCache(getDb());
+      } catch (err) {
+        console.error("[cache]", (err as Error).message);
+      }
+    }
   };
   // Kurz nach Minutenbeginn prüfen, damit 21:00 auch um 21:00 ankommt
   const delay = 60_000 - (Date.now() % 60_000) + 2_000;

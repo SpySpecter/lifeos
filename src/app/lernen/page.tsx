@@ -51,7 +51,7 @@ async function StudyTimeCard() {
   return (
     <WidgetCard
       title="Lernzeit diese Woche"
-      footer={rows.length ? "Graue Spur: geplant in den Lernplänen · Balken: gemessen mit dem Fokus-Timer." : undefined}
+      footer={rows.length ? "Balken: mit dem Fokus-Timer gemessen · grau: laut Lernplan geplant." : undefined}
     >
       {rows.length ? (
         <>
