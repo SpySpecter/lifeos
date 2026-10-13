@@ -302,6 +302,14 @@ export async function saveWeeklyReviewSettingsAction(_prev: FormState, formData:
   return { ok: true, message: parsed.data.enabled ? `Gespeichert – kommt sonntags um ${parsed.data.time}` : "Gespeichert – Push aus" };
 }
 
+export async function saveNewCardsAction(_prev: FormState, formData: FormData): Promise<FormState> {
+  const parsed = z.coerce.number().int().min(1, "Mindestens 1").max(500, "Höchstens 500").safeParse(formData.get("perDay"));
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
+  setSetting(db(), "newCardsPerDay", parsed.data);
+  revalidatePath("/", "layout");
+  return { ok: true, message: `Gespeichert – bis zu ${parsed.data} neue Karten am Tag` };
+}
+
 /** Rückblick einer Woche neu bauen (frische Zahlen, neuer KI-Kommentar). */
 export async function refreshReviewAction(week: string) {
   const tz = env().APP_TZ;

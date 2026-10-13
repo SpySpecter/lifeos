@@ -9,6 +9,7 @@ import {
   saveBriefingSettingsAction,
   saveWeeklyReviewSettingsAction,
   saveMailProfileAction,
+  saveNewCardsAction,
   saveProfileAction,
   type FormState,
 } from "@/app/actions";
@@ -112,6 +113,26 @@ export function WeeklyReviewForm({ review }: { review: Settings["weeklyReview"] 
         <label className="flex min-h-11 items-center gap-3 px-4 py-2">
           <span className="flex-1 text-body">Uhrzeit</span>
           <Input type="time" name="time" defaultValue={review.time} required className="w-[8.5rem] tabular-nums" />
+        </label>
+      </div>
+      <div className="flex items-center gap-3">
+        <Button type="submit" disabled={pending}>
+          Speichern
+        </Button>
+        <Status state={state} />
+      </div>
+    </form>
+  );
+}
+
+export function NewCardsForm({ perDay }: { perDay: number }) {
+  const [state, action, pending] = useActionState<FormState, FormData>(saveNewCardsAction, null);
+  return (
+    <form action={action} className="space-y-4">
+      <div className="ios-inset-rows -mx-4 border-y border-border [--inset:16px]">
+        <label className="flex min-h-11 items-center gap-3 px-4 py-2">
+          <span className="flex-1 text-body">Neue Karten pro Tag</span>
+          <Input type="number" name="perDay" min={1} max={500} defaultValue={perDay} required inputMode="numeric" className="w-[6rem] text-right tabular-nums" />
         </label>
       </div>
       <div className="flex items-center gap-3">

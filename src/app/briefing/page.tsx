@@ -161,8 +161,8 @@ function HabitsCard({ day }: { day: string }) {
 /** Live aus den Lernplänen – nicht Teil des gespeicherten Briefings, damit Abhaken sofort sichtbar ist. */
 async function StudyCard({ day }: { day: string }) {
   const sessions = todaysSessions(db(), day);
-  const { now, end } = await cardWindow();
-  const cards = dueCount(db(), now, end);
+  const { now, end, newLeft } = await cardWindow();
+  const cards = dueCount(db(), now, end, newLeft);
   if (!sessions.length && !cards) return null;
   const open = sessions.filter((s) => !s.done).reduce((n, s) => n + s.minutes, 0);
   const footer = [sessions.length ? (open ? `${open} Min. offen` : "Alles geschafft. 🎉") : null, cards ? `${cards} ${cards === 1 ? "Karte" : "Karten"} fällig` : null]

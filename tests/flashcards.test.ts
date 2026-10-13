@@ -71,3 +71,33 @@ describe("Stapel und Karten", () => {
     expect(db.prepare("SELECT COUNT(*) AS n FROM flashcard_reviews").get()).toEqual({ n: 0 });
   });
 });
+
+describe("Tageslimit für neue Karten", () => {
+  it("lässt höchstens newLeft neue Karten zu, Wiederholungen bleiben unberührt", async () => {
+    const { newCardsLeft } = await import("@/lib/flashcards");
+    const db = memoryDb();
+    const deck = createDeck(db, { title: "KI-Stapel" }, NOW);
+    addCards(db, deck, Array.from({ length: 30 }, (_, i) => ({ front: `F${i}`, back: `B${i}` })), NOW);
+    const end = dayEnd(NOW, "Europe/Berlin");
+
+    expect(newCardsLeft(db, NOW, "Europe/Berlin", 20)).toBe(20);
+    expect(dueCount(db, NOW, end, 20)).toBe(20);
+    expect(dueCards(db, deck, NOW, end, 200, 20)).toHaveLength(20);
+    expect(listDecks(db, NOW, end, 20)[0]).toMatchObject({ total: 30, due: 20, fresh: 30 });
+
+    // 5 neue gelernt (eine davon gleich zweimal) → noch 15 neue, die Lernkarte zählt zusätzlich
+    const first = dueCards(db, deck, NOW, end, 200, 20).slice(0, 5);
+    for (const c of first) reviewCard(db, c.id, 3, NOW);
+    reviewCard(db, first[0].id, 3, NOW + MIN);
+    const left = newCardsLeft(db, NOW + 2 * MIN, "Europe/Berlin", 20);
+    expect(left).toBe(15);
+    const next = dueCards(db, deck, NOW + 20 * MIN, end, 200, left);
+    expect(next.filter((c) => c.state === 0)).toHaveLength(15);
+    expect(next[0].state).not.toBe(0); // Lernkarten vor neuen
+
+    // am nächsten Tag gibt es wieder 20
+    expect(newCardsLeft(db, NOW + DAY, "Europe/Berlin", 20)).toBe(20);
+    // ohne Limit wie bisher
+    expect(dueCount(db, NOW, end)).toBeGreaterThanOrEqual(25);
+  });
+});

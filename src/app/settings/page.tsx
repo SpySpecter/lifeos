@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { Suspense } from "react";
 import { DisconnectButton } from "@/components/disconnect-button";
 import { MailAppPicker } from "@/components/mail-link";
-import { BriefingForm, ClearInboxForm, MailProfileForm, ProfileForm, RuleForm, RuleList, WeeklyReviewForm } from "@/components/settings-forms";
+import { BriefingForm, ClearInboxForm, MailProfileForm, NewCardsForm, ProfileForm, RuleForm, RuleList, WeeklyReviewForm } from "@/components/settings-forms";
 import { googleAccounts, missingFeatures } from "@/integrations/google";
 import { db, plainRows } from "@/lib/db";
 import { monthSpendUsd } from "@/lib/openai";
@@ -149,6 +149,16 @@ async function SettingsContent({ searchParams }: { searchParams: Promise<Record<
         status={settings.weeklyReview.enabled ? `So ${settings.weeklyReview.time}` : "Aus"}
       >
         <WeeklyReviewForm review={settings.weeklyReview} />
+      </Row>
+
+      <Row
+        id="karteikarten"
+        title="Karteikarten"
+        description="Neue Karten kommen gestaffelt dazu, damit ein großer KI-Stapel nicht auf einmal fällig wird und sich die Wiederholungen der nächsten Tage nicht stauen. Quick Learn ist davon ausgenommen."
+        state="ok"
+        status={`${settings.newCardsPerDay} neue pro Tag`}
+      >
+        <NewCardsForm perDay={settings.newCardsPerDay} />
       </Row>
 
       <Row id="untis" title="Schule (WebUntis)" description="Stundenplan, Ausfälle und Vertretungen der nächsten 7 Tage." state={uState} status={uStatus}>

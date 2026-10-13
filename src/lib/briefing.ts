@@ -10,7 +10,7 @@ import { env, isDemo } from "./env";
 import { courseName } from "./hero";
 import { recentNews, summarizeNews, type NewsDigest } from "./news-digest";
 import { countSubscriptions, sendToAll, type PushMessage, type Sender } from "./push";
-import { dayEnd, dueCount } from "./flashcards";
+import { dayEnd, dueCount, newCardsLeft } from "./flashcards";
 import { getSettings, type Settings } from "./settings";
 import { openStudyMinutes } from "./study";
 import { addDays, dayString, formatTime, localClock } from "./time";
@@ -236,7 +236,7 @@ export async function runBriefing(db: DB, now: Date, tz: string, send?: Sender):
   if (!claimPush(db, day, now.getTime())) return null;
   const b = await getOrCreateBriefing(db, now, tz);
   if (!countSubscriptions(db)) return { sent: 0 };
-  const r = await sendToAll(db, briefingPushMessage(b, openStudyMinutes(db, day), dueCount(db, now.getTime(), dayEnd(now.getTime(), tz))), send);
+  const r = await sendToAll(db, briefingPushMessage(b, openStudyMinutes(db, day), dueCount(db, now.getTime(), dayEnd(now.getTime(), tz), newCardsLeft(db, now.getTime(), tz, getSettings(db).newCardsPerDay))), send);
   if (r.failed) console.warn(`[briefing] ${r.failed} fehlgeschlagen (${r.errors.join(", ")})`);
   return { sent: r.sent };
 }

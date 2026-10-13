@@ -21,9 +21,9 @@ function cardStatus(c: Flashcard, now: number): string {
 }
 
 async function DeckContent({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const { now, end } = await cardWindow();
+  const { now, end, newLeft } = await cardWindow();
   const deckId = Number((await searchParams).id);
-  const deck = Number.isInteger(deckId) && deckId > 0 ? getDeck(db(), deckId, now, end) : null;
+  const deck = Number.isInteger(deckId) && deckId > 0 ? getDeck(db(), deckId, now, end, newLeft) : null;
   if (!deck) notFound();
   return (
     <>

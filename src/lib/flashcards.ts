@@ -6,6 +6,8 @@ import { addDays, today, zonedToEpoch } from "./time";
 /**
  * Karteikarten in Stapeln, wiederholt mit FSRS. „Fällig“ heißt: bis Ende des Tages dran
  * (Karten in der Lernphase erst ab ihrer Minute), damit die Zahl morgens schon stimmt.
+ * Neue Karten kommen höchstens `newLeft` pro Tag dazu (wie in Anki), sonst wären nach einem
+ * KI-Stapel mit 80 Karten alle 80 auf einmal fällig und die Wiederholungen stauen sich.
  */
 
 export type Deck = {
@@ -27,8 +29,26 @@ export function dayEnd(now: number, tz: string): number {
   return zonedToEpoch(addDays(today(tz, new Date(now)), 1), "00:00", tz);
 }
 
-// Bedingung „fällig“: Lernkarten minutengenau, alles andere bis Tagesende
-const due = (p = "") => `((${p}state IN (1, 3) AND ${p}due <= :now) OR (${p}state NOT IN (1, 3) AND ${p}due < :end))`;
+/** Beginn des heutigen Tages (Mitternacht) in der App-Zeitzone. */
+export function dayStart(now: number, tz: string): number {
+  return zonedToEpoch(today(tz, new Date(now)), "00:00", tz);
+}
+
+export const DEFAULT_NEW_PER_DAY = 20;
+
+/** Wie viele neue Karten heute noch drankommen dürfen (heute schon zum ersten Mal gesehene zählen mit). */
+export function newCardsLeft(db: DB, now: number, tz: string, perDay: number): number {
+  const { n } = db
+    .prepare("SELECT COUNT(DISTINCT card_id) AS n FROM flashcard_reviews WHERE state = 0 AND reviewed_at >= ?")
+    .get(dayStart(now, tz)) as { n: number };
+  return Math.max(0, perDay - n);
+}
+
+// Bedingung „fällig“ ohne neue Karten: Lernkarten minutengenau, Wiederholungen bis Tagesende
+const due = (p = "") => `((${p}state IN (1, 3) AND ${p}due <= :now) OR (${p}state = 2 AND ${p}due < :end))`;
+const fresh = (p = "") => `(${p}state = 0 AND ${p}due < :end)`;
+/** SQLite: LIMIT -1 = unbegrenzt */
+const sqlLimit = (n: number) => (Number.isFinite(n) ? Math.max(0, Math.floor(n)) : -1);
 
 type CardRow = {
   id: number;
@@ -109,40 +129,70 @@ export function deleteCard(db: DB, id: number): void {
   db.prepare("DELETE FROM flashcards WHERE id = ?").run(id);
 }
 
-export function listDecks(db: DB, now: number, end: number): Deck[] {
+/** `due` je Stapel: fällige Wiederholungen plus neue Karten bis zum Tageslimit (`newLeft` gilt für alle Stapel zusammen). */
+export function listDecks(db: DB, now: number, end: number, newLeft = Infinity): Deck[] {
   const rows = db
     .prepare(
       `SELECT d.id, d.title, d.subject, d.material_id, d.created_at,
               COUNT(c.id) AS total,
               COALESCE(SUM(CASE WHEN c.id IS NOT NULL AND ${due("c.")} THEN 1 ELSE 0 END), 0) AS due,
+              COALESCE(SUM(CASE WHEN c.id IS NOT NULL AND ${fresh("c.")} THEN 1 ELSE 0 END), 0) AS fresh_due,
               COALESCE(SUM(CASE WHEN c.state = 0 THEN 1 ELSE 0 END), 0) AS fresh
        FROM flashcard_decks d LEFT JOIN flashcards c ON c.deck_id = d.id
        GROUP BY d.id ORDER BY d.created_at DESC, d.id DESC`,
     )
-    .all({ now, end }) as { id: number; title: string; subject: string | null; material_id: number | null; created_at: number; total: number; due: number; fresh: number }[];
-  return rows.map((r) => ({ id: r.id, title: r.title, subject: r.subject, materialId: r.material_id, createdAt: r.created_at, total: r.total, due: r.due, fresh: r.fresh }));
+    .all({ now, end }) as {
+    id: number;
+    title: string;
+    subject: string | null;
+    material_id: number | null;
+    created_at: number;
+    total: number;
+    due: number;
+    fresh_due: number;
+    fresh: number;
+  }[];
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    subject: r.subject,
+    materialId: r.material_id,
+    createdAt: r.created_at,
+    total: r.total,
+    due: r.due + Math.min(r.fresh_due, newLeft),
+    fresh: r.fresh,
+  }));
 }
 
-export function getDeck(db: DB, id: number, now: number, end: number): (Deck & { cards: Flashcard[] }) | null {
-  const deck = listDecks(db, now, end).find((d) => d.id === id);
+export function getDeck(db: DB, id: number, now: number, end: number, newLeft = Infinity): (Deck & { cards: Flashcard[] }) | null {
+  const deck = listDecks(db, now, end, newLeft).find((d) => d.id === id);
   if (!deck) return null;
   const cards = (db.prepare("SELECT * FROM flashcards WHERE deck_id = ? ORDER BY id").all(id) as CardRow[]).map(toCard);
   return { ...deck, cards };
 }
 
-/** Fällige Karten eines Stapels (oder aller): Lernkarten zuerst, dann Wiederholungen, dann neue. */
-export function dueCards(db: DB, deckId: number | null, now: number, end: number, limit = 200): Flashcard[] {
-  const rows = db
+/** Fällige Karten eines Stapels (oder aller): Lernkarten zuerst, dann Wiederholungen, dann neue (bis `newLeft`). */
+export function dueCards(db: DB, deckId: number | null, now: number, end: number, limit = 200, newLeft = Infinity): Flashcard[] {
+  const known = db
     .prepare(
       `SELECT * FROM flashcards WHERE ${due()} AND (:deck IS NULL OR deck_id = :deck)
-       ORDER BY CASE state WHEN 1 THEN 0 WHEN 3 THEN 0 WHEN 2 THEN 1 ELSE 2 END, due, id LIMIT :limit`,
+       ORDER BY CASE state WHEN 2 THEN 1 ELSE 0 END, due, id LIMIT :limit`,
     )
     .all({ now, end, deck: deckId, limit }) as CardRow[];
-  return rows.map(toCard);
+  const room = Math.min(limit - known.length, newLeft);
+  const added = room > 0
+    ? (db
+        .prepare(`SELECT * FROM flashcards WHERE ${fresh()} AND (:deck IS NULL OR deck_id = :deck) ORDER BY due, id LIMIT :limit`)
+        .all({ end, deck: deckId, limit: sqlLimit(room) }) as CardRow[])
+    : [];
+  return [...known, ...added].map(toCard);
 }
 
-export function dueCount(db: DB, now: number, end: number): number {
-  return (db.prepare(`SELECT COUNT(*) AS n FROM flashcards WHERE ${due()}`).get({ now, end }) as { n: number }).n;
+export function dueCount(db: DB, now: number, end: number, newLeft = Infinity): number {
+  const { known, added } = db
+    .prepare(`SELECT COALESCE(SUM(${due()}), 0) AS known, COALESCE(SUM(${fresh()}), 0) AS added FROM flashcards`)
+    .get({ now, end }) as { known: number; added: number };
+  return known + Math.min(added, newLeft);
 }
 
 /** Bewertung speichern und den neuen Zustand zurückgeben. */

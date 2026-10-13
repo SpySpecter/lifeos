@@ -10,13 +10,13 @@ import { dueCards, getDeck } from "@/lib/flashcards";
 export const metadata: Metadata = { title: "Wiederholen" };
 
 async function ReviewContent({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const { now, end } = await cardWindow();
+  const { now, end, newLeft } = await cardWindow();
   const params = await searchParams;
   const quick = params.modus === "quick";
   const deckId = Number(params.deck);
-  const deck = Number.isInteger(deckId) && deckId > 0 ? getDeck(db(), deckId, now, end) : null;
+  const deck = Number.isInteger(deckId) && deckId > 0 ? getDeck(db(), deckId, now, end, newLeft) : null;
   // Quick Learn: alle Karten des Stapels; sonst nur Fälliges (eines Stapels oder aller)
-  const cards = quick ? (deck?.cards ?? []) : dueCards(db(), deck?.id ?? null, now, end);
+  const cards = quick ? (deck?.cards ?? []) : dueCards(db(), deck?.id ?? null, now, end, 200, newLeft);
   const back = deck ? { href: `/lernen/stapel?id=${deck.id}`, label: deck.title } : { href: "/lernen", label: "Lernen" };
   return (
     <>

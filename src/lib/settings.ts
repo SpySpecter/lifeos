@@ -2,6 +2,7 @@ import type { DB } from "./db";
 import { DEFAULT_LAYOUT, normalizeLayout, type DashboardLayout } from "./dashboard";
 import { METRICS } from "./health";
 import type { MailApp } from "./mail/links";
+import { DEFAULT_NEW_PER_DAY } from "./flashcards";
 
 /** Einstellungen, die im Dashboard änderbar sind (Schlüssel-Wert-Tabelle, Werte als JSON). */
 export type Settings = {
@@ -22,6 +23,8 @@ export type Settings = {
   gradeSemester: "Q1" | "Q2" | "Q3" | "Q4";
   /** Wohin ein Tipp auf eine Mail führt (iPhone/iPad) */
   mailApp: MailApp;
+  /** Karteikarten: höchstens so viele neue Karten pro Tag */
+  newCardsPerDay: number;
 };
 
 export const DEFAULT_MAIL_PROFILE = `Ich bin Schüler in der Oberstufe (Brandenburg, LK Informatik) und programmiere viel (GitHub, KI-Tools, eigener VPS).
@@ -47,6 +50,7 @@ export function defaultSettings(): Settings {
     gradeSemester: "Q1",
     weeklyReview: { enabled: true, time: "18:00" },
     mailApp: "mail",
+    newCardsPerDay: DEFAULT_NEW_PER_DAY,
   };
 }
 
