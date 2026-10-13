@@ -172,15 +172,34 @@ export function fetchableArticle(link: string): boolean {
 }
 
 const OG_MAX_BYTES = 150_000;
+const MAX_REDIRECTS = 4;
+
+/**
+ * Artikelseite laden; Weiterleitungen werden selbst verfolgt und jedes Ziel wie der Link geprüft –
+ * sonst könnte ein Feed-Link per 302 auf interne Adressen (Metadaten-Dienst, localhost) zeigen.
+ */
+export async function fetchArticle(link: string): Promise<Response | null> {
+  const signal = AbortSignal.timeout(4000);
+  let url = link;
+  for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+    if (!fetchableArticle(url)) return null;
+    const res = await fetch(url, {
+      signal,
+      cache: "no-store",
+      redirect: "manual",
+      headers: { "User-Agent": "Mozilla/5.0 (LifeOS dashboard; +https://github.com/SpySpecter/lifeos)", Accept: "text/html" },
+    });
+    const location = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+    if (!location) return res;
+    await res.body?.cancel().catch(() => undefined);
+    url = new URL(location, url).href;
+  }
+  return null;
+}
 
 async function fetchOgImage(link: string): Promise<string | null> {
-  const res = await fetch(link, {
-    signal: AbortSignal.timeout(4000),
-    cache: "no-store",
-    redirect: "follow",
-    headers: { "User-Agent": "Mozilla/5.0 (LifeOS dashboard; +https://github.com/SpySpecter/lifeos)", Accept: "text/html" },
-  });
-  if (!res.ok || !res.body) return null;
+  const res = await fetchArticle(link);
+  if (!res?.ok || !res.body) return null;
   // nur den Anfang der Seite lesen – og:image steht im <head>
   const reader = res.body.getReader();
   const decoder = new TextDecoder();

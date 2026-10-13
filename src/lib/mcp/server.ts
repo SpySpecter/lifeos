@@ -6,12 +6,18 @@ import { z } from "zod";
  * Spezifikation: https://modelcontextprotocol.io/specification/2025-06-18/basic/transports
  */
 
+export type McpToolAnnotations = { readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean; openWorldHint?: boolean };
+
 export type McpTool<S extends z.ZodObject = z.ZodObject> = {
   name: string;
   description: string;
   input: S;
+  /** Standard: nur lesend. Schreibende Tools müssen das hier ehrlich angeben, damit Clients vorher nachfragen. */
+  annotations?: McpToolAnnotations;
   run(args: z.infer<S>): Promise<unknown>;
 };
+
+const READ_ONLY: McpToolAnnotations = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true };
 
 export const defineTool = <S extends z.ZodObject>(tool: McpTool<S>) => tool as unknown as McpTool;
 
@@ -47,7 +53,7 @@ export async function dispatch(msg: JsonRpcRequest, info: McpServerInfo, tools: 
           name: t.name,
           description: t.description,
           inputSchema: z.toJSONSchema(t.input, { io: "input" }),
-          annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+          annotations: t.annotations ?? READ_ONLY,
         })),
       });
     case "tools/call": {
