@@ -35,14 +35,18 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # SHA des geprüften Commits; bei workflow_run ist github.sha der aktuelle main-Stand, nicht zwingend dieser
+      - id: rev
+        run: echo "short=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT" && echo "full=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - id: meta
         uses: docker/metadata-action@v6
         with:
-          context: git # SHA-Tag vom ausgecheckten Commit statt vom auslösenden Ereignis
           images: ghcr.io/spyspecter/lifeos
           tags: |
             type=raw,value=latest
-            type=sha,format=short
+            type=raw,value=sha-${{ steps.rev.outputs.short }}
+          labels: |
+            org.opencontainers.image.revision=${{ steps.rev.outputs.full }}
       - uses: docker/build-push-action@v7
         with:
           context: .
