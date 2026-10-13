@@ -20,6 +20,7 @@ import { isDemo } from "@/lib/env";
 import { clearInbox, decideMail, runTriage, undoMail, upsertRule } from "@/lib/mail/triage";
 import { decideDriveItem, markDriveItem, startDriveCleanup, undoDriveItem } from "@/lib/drive/cleanup";
 import { CATEGORIES } from "@/lib/mail/policy";
+import { MAIL_APPS } from "@/lib/mail/links";
 import { getSettings, setSetting } from "@/lib/settings";
 import { getOrCreateBriefing } from "@/lib/briefing";
 import { getOrCreateReview } from "@/lib/weekly-review";
@@ -240,6 +241,12 @@ export async function addMailRuleAction(_prev: FormState, formData: FormData): P
   upsertRule(db(), { matchType: pattern.includes("@") ? "sender" : "domain", pattern: pattern.replace(/^@/, ""), action, category }, "nutzer");
   revalidatePath("/settings");
   return { ok: true, message: "Regel gespeichert" };
+}
+
+/** Wohin ein Tipp auf eine Mail führt: Apple Mail, Gmail-App oder Browser. */
+export async function setMailAppAction(value: string) {
+  setSetting(db(), "mailApp", z.enum(MAIL_APPS).parse(value));
+  revalidatePath("/", "layout");
 }
 
 // ─── Persönliche Einstellungen ─────────────────────────────────────────

@@ -5,6 +5,7 @@ import { connection } from "next/server";
 import type { ReactNode } from "react";
 import { Suspense } from "react";
 import { DisconnectButton } from "@/components/disconnect-button";
+import { MailAppPicker } from "@/components/mail-link";
 import { BriefingForm, ClearInboxForm, MailProfileForm, ProfileForm, RuleForm, RuleList, WeeklyReviewForm } from "@/components/settings-forms";
 import { googleAccounts, missingFeatures } from "@/integrations/google";
 import { db, plainRows } from "@/lib/db";
@@ -176,6 +177,15 @@ async function SettingsContent({ searchParams }: { searchParams: Promise<Record<
               </li>
             ))}
           </ul>
+        ) : null}
+        {accounts.length || demo ? (
+          <div className="space-y-1.5">
+            <h3 className="font-semibold">Mails öffnen in</h3>
+            <MailAppPicker value={settings.mailApp} />
+            <p className="text-footnote text-muted-foreground">
+              Gilt auf iPhone und iPad. Apple Mail springt direkt zur Mail, wenn das Konto dort eingerichtet ist; die Gmail-App öffnet nur den Posteingang (Google bietet keinen Link auf einzelne Mails).
+            </p>
+          </div>
         ) : null}
         {accounts.length || demo ? (
           <Link href="/drive" className="flex min-h-11 items-center justify-between rounded-[14px] bg-muted px-3 font-semibold text-tint-text active:opacity-60">

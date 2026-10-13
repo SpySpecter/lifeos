@@ -1,6 +1,7 @@
 import type { DB } from "./db";
 import { DEFAULT_LAYOUT, normalizeLayout, type DashboardLayout } from "./dashboard";
 import { METRICS } from "./health";
+import type { MailApp } from "./mail/links";
 
 /** Einstellungen, die im Dashboard änderbar sind (Schlüssel-Wert-Tabelle, Werte als JSON). */
 export type Settings = {
@@ -19,6 +20,8 @@ export type Settings = {
   weeklyReview: { enabled: boolean; time: string };
   /** Noten: aktuelles Halbjahr der Qualifikationsphase */
   gradeSemester: "Q1" | "Q2" | "Q3" | "Q4";
+  /** Wohin ein Tipp auf eine Mail führt (iPhone/iPad) */
+  mailApp: MailApp;
 };
 
 export const DEFAULT_MAIL_PROFILE = `Ich bin Schüler in der Oberstufe (Brandenburg, LK Informatik) und programmiere viel (GitHub, KI-Tools, eigener VPS).
@@ -43,6 +46,7 @@ export function defaultSettings(): Settings {
     driveProtected: [],
     gradeSemester: "Q1",
     weeklyReview: { enabled: true, time: "18:00" },
+    mailApp: "mail",
   };
 }
 

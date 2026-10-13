@@ -33,7 +33,17 @@ export type CalendarEvent = {
   url: string | null;
   account: string;
 };
-export type MailItem = { id: string; from: string; subject: string; snippet: string; date: string; url: string; account: string };
+export type MailItem = {
+  id: string;
+  from: string;
+  subject: string;
+  snippet: string;
+  date: string;
+  url: string;
+  account: string;
+  /** RFC-Message-ID („<…@…>“) – damit Apple Mail genau diese Mail öffnen kann */
+  messageId?: string | null;
+};
 export type DriveFile = { id: string; name: string; mimeType: string; modified: string; url: string; account: string };
 export type AccountMail = { account: string; unread: number; latest: MailItem[] };
 
@@ -267,7 +277,7 @@ async function fetchMail(token: string, account: string): Promise<AccountMail> {
   const latest = await Promise.all(
     (list.messages ?? []).map(async ({ id }) => {
       const m = await api<{ id: string; snippet: string; internalDate: string; payload: { headers: { name: string; value: string }[] } }>(
-        `${base}/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject`,
+        `${base}/messages/${id}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Message-ID`,
         token,
       );
       return {
@@ -278,6 +288,7 @@ async function fetchMail(token: string, account: string): Promise<AccountMail> {
         date: new Date(Number(m.internalDate)).toISOString(),
         url: `https://mail.google.com/mail/u/${encodeURIComponent(account)}/#inbox/${m.id}`,
         account,
+        messageId: header(m.payload.headers, "Message-ID") || null,
       };
     }),
   );
@@ -359,15 +370,15 @@ export const google: Integration<GoogleData> = {
           account: me,
           unread: 4,
           latest: [
-            { id: "b", from: "GitHub", subject: "[SpySpecter/lifeos] CI passed on main", snippet: "All checks have passed.", date: ago(120), url: "#", account: me },
-            { id: "c", from: "Fahrschule Mitte", subject: "Terminbestätigung", snippet: "Deine nächste Fahrstunde ist heute um 16:30 Uhr.", date: ago(300), url: "#", account: me },
+            { id: "b", from: "GitHub", subject: "[SpySpecter/lifeos] CI passed on main", snippet: "All checks have passed.", date: ago(120), url: "#", account: me, messageId: "<demo-ci@github.com>" },
+            { id: "c", from: "Fahrschule Mitte", subject: "Terminbestätigung", snippet: "Deine nächste Fahrstunde ist heute um 16:30 Uhr.", date: ago(300), url: "#", account: me, messageId: "<demo-termin@fahrschule.de>" },
           ],
         },
         {
           account: school,
           unread: 3,
           latest: [
-            { id: "a", from: "Schulleitung", subject: "Elternbrief: Projektwoche", snippet: "Liebe Schülerinnen und Schüler, in der Woche vor den Ferien …", date: ago(35), url: "#", account: school },
+            { id: "a", from: "Schulleitung", subject: "Elternbrief: Projektwoche", snippet: "Liebe Schülerinnen und Schüler, in der Woche vor den Ferien …", date: ago(35), url: "#", account: school, messageId: "<demo-elternbrief@schule.de>" },
           ],
         },
       ],
