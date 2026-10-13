@@ -141,6 +141,26 @@ Safari → `https://lifeos.<tailnet>` → Teilen → **Zum Home-Bildschirm**. F�
 
 **Habit-Erinnerungen (Push):** LifeOS vom Home-Bildschirm öffnen → *Gewohnheiten* → *Erinnerungen* → **Mitteilungen aktivieren** und erlauben (iOS 16.4 oder neuer; in Safari selbst bietet iOS das nicht an). Danach bei einer Gewohnheit über den Stift eine Uhrzeit setzen. Ist sie zu dieser Zeit noch offen, kommt eine Mitteilung – höchstens eine pro Tag und Gewohnheit. Die Nachrichten laufen über Apples Push-Dienst und kommen auch an, wenn Tailscale auf dem iPhone gerade aus ist; zum Öffnen der App braucht es Tailscale wie immer. Die nötigen VAPID-Schlüssel erzeugt LifeOS selbst und speichert sie verschlüsselt in der Datenbank – in der `.env` ist nichts einzutragen.
 
+**Mails öffnen:** Unter *Einstellungen → Google* wählen, wohin ein Tipp auf eine Mail führt: **Apple Mail** (springt direkt zur Mail, wenn das Konto in der Mail-App eingerichtet ist), **Gmail-App** (öffnet die App; Google bietet keinen Link auf einzelne Mails) oder **Browser**.
+
+---
+
+## 8. Claude anbinden (MCP)
+
+LifeOS bringt zwei MCP-Server mit, beide nur im Tailnet erreichbar:
+
+| Server | Adresse | Kann |
+|---|---|---|
+| `untis` | `/api/mcp` | Stundenplan, Ausfälle, Klausuren, Hausaufgaben – nur lesen |
+| `lifeos` | `/api/mcp/lifeos` | Habits, Erinnerungen, Karteikarten, Noten, Lernpläne, Gesundheit – lesen **und eintragen** (abhaken, Erinnerung/Karten/Note anlegen). Löschen geht bewusst nicht. |
+
+```bash
+claude mcp add --transport http untis https://lifeos.<tailnet>/api/mcp
+claude mcp add --transport http lifeos https://lifeos.<tailnet>/api/mcp/lifeos
+```
+
+Danach z. B.: „Was steht heute an?“, „Hak Vokabeln ab“, „Erinner mich morgen um 17 Uhr an das Bio-Referat“, „Mach mir aus diesem Text 20 Karteikarten in einen neuen Stapel Biologie“, „Trag 11 Punkte in der Mathe-Klausur ein“. Schreibende Tools sind als solche markiert – Claude fragt vor dem Ausführen nach.
+
 ---
 
 ## Betrieb

@@ -38,7 +38,7 @@ Runs 24/7 on a 5 € VPS and is reachable **only inside my Tailscale network**.
 | 🎵 **Music** | Spotify Web API | Now playing, recently played, top artists (PKCE, dev-mode-compatible endpoints only) |
 | 📰 **News** | RSS / Atom | Tagesschau, politics, regional (rbb24), blue-light reports, heise, The Verge, Hacker News – thumbnails (feed media or the article's `og:image`), category tabs, local stories pinned |
 
-Plus: a read-only **Untis MCP server** at `/api/mcp` (timetable, changes, exams, homework) so Claude can answer school questions from inside the tailnet, per-widget streaming & error isolation, stale-while-error caching.
+Plus: two **MCP servers** for Claude inside the tailnet – a read-only Untis server at `/api/mcp` (timetable, changes, exams, homework) and a **LifeOS server** at `/api/mcp/lifeos` that reads *and* writes (check off habits, create reminders, add flashcards and grades, log health; deliberately no deletes, write tools are annotated so clients ask first) – plus per-widget streaming & error isolation and stale-while-error caching.
 
 ### Designed like an iPhone app
 
