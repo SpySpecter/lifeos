@@ -14,8 +14,17 @@ type WebkitVideo = HTMLVideoElement & {
 export const PIP_W = 480;
 export const PIP_H = 270;
 
+/** iPhone/iPad (iPadOS meldet sich als Mac, hat aber Touch). */
+export function isAppleTouch(): boolean {
+  if (typeof navigator === "undefined") return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (/Macintosh/.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+}
+
 export function pipSupported(): boolean {
   if (typeof document === "undefined") return false;
+  // iOS/iPadOS lehnt PiP für Videos mit MediaStream-Quelle ab (WebKit #262479), in Home-Bildschirm-Apps
+  // auch sonst (WebKit #303885) – dort gibt es stattdessen den Mini-Timer
+  if (isAppleTouch()) return false;
   const canvas = document.createElement("canvas") as HTMLCanvasElement & { captureStream?: unknown };
   if (typeof canvas.captureStream !== "function") return false;
   const video = document.createElement("video") as WebkitVideo;
@@ -70,8 +79,8 @@ export function enterPip(canvas: HTMLCanvasElement, video: HTMLVideoElement): Pr
 export function pipErrorMessage(err: unknown): string {
   const name = err instanceof Error || err instanceof DOMException ? err.name : "Fehler";
   if (name === "PipNotReadyError") return "Bild-in-Bild lädt noch – tippe gleich nochmal.";
-  if (name === "NotAllowedError") return "iPadOS hat Bild-in-Bild blockiert (NotAllowedError). Tippe nochmal direkt auf den Knopf.";
-  if (name === "NotSupportedError") return "Bild-in-Bild ist hier nicht verfügbar (NotSupportedError). Öffne LifeOS in Safari.";
+  if (name === "NotAllowedError") return "Der Browser hat Bild-in-Bild blockiert (NotAllowedError). Tippe nochmal direkt auf den Knopf.";
+  if (name === "NotSupportedError") return "Bild-in-Bild ist hier nicht verfügbar (NotSupportedError). Nutze den Mini-Timer.";
   return `Bild-in-Bild ging nicht (${name}).`;
 }
 

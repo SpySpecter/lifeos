@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { enterPip, pipErrorMessage } from "@/components/focus/pip";
+import { enterPip, isAppleTouch, pipErrorMessage } from "@/components/focus/pip";
 
 function fakes(opts: { readyState: number; standard: boolean }) {
   const stream = { getTracks: () => [] };
@@ -50,5 +50,19 @@ describe("Bild-in-Bild", () => {
     expect(pipErrorMessage(err)).toContain("nochmal");
     expect(pipErrorMessage(new DOMException("x", "NotAllowedError"))).toContain("NotAllowedError");
     expect(pipErrorMessage(new DOMException("x", "AbortError"))).toContain("AbortError");
+  });
+});
+
+describe("isAppleTouch", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const ua = (userAgent: string, maxTouchPoints: number) => vi.stubGlobal("navigator", { userAgent, maxTouchPoints });
+
+  it("erkennt iPad (meldet sich als Mac mit Touch) und iPhone, nicht den Mac", () => {
+    ua("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/26.0 Safari/605.1.15", 5);
+    expect(isAppleTouch()).toBe(true);
+    ua("Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15", 5);
+    expect(isAppleTouch()).toBe(true);
+    ua("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/26.0 Safari/605.1.15", 0);
+    expect(isAppleTouch()).toBe(false);
   });
 });

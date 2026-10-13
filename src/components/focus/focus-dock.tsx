@@ -1,6 +1,7 @@
 "use client";
 
-import { Coffee, Pause, PictureInPicture2, Play, Plus, SkipForward, Square, Timer, Trash2 } from "lucide-react";
+import { Coffee, Minimize2, Pause, PictureInPicture2, Play, Plus, SkipForward, Square, Timer, Trash2 } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { cancelFocusAction, finishFocusAction, focusOptionsAction, startFocusAction, updateFocusAction, type FocusOptions } from "@/app/actions";
 import { haptic } from "@/lib/haptics";
@@ -10,7 +11,7 @@ import { Sheet } from "../ios/sheet";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
-import { drawFrame, enterPip, exitPip, pipActive, pipErrorMessage, pipSupported, preparePip, releasePip, PIP_H, PIP_W } from "./pip";
+import { drawFrame, enterPip, exitPip, isAppleTouch, pipActive, pipErrorMessage, pipSupported, preparePip, releasePip, PIP_H, PIP_W } from "./pip";
 import { focusStore, openFocus, useFocus, type FocusPreset } from "./store";
 import {
   addMinutes,
@@ -63,7 +64,7 @@ function sync(t: FocusTimer, now: number) {
   void updateFocusAction(t.id, phase, endsAt, focusedMs(t, now) / MIN).catch(() => undefined);
 }
 
-function apply(fn: (t: FocusTimer, now: number) => FocusTimer) {
+export function apply(fn: (t: FocusTimer, now: number) => FocusTimer) {
   const now = Date.now();
   const t = focusStore.get().timer;
   if (!t) return;
@@ -85,6 +86,8 @@ export function FocusDock() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [inPip, setInPip] = useState(false);
   const [pipError, setPipError] = useState<string | null>(null);
+  // auf der Mini-Timer-Seite ist die Pille überflüssig
+  const onMiniPage = usePathname() === "/fokus";
 
   // Sekundentakt, Phasen weiterschalten, Bild-in-Bild neu malen
   useEffect(() => {
@@ -164,7 +167,7 @@ export function FocusDock() {
 
   return (
     <>
-      {timer && now && !sheetOpen ? <FocusPill timer={timer} now={now} /> : null}
+      {timer && now && !sheetOpen && !onMiniPage ? <FocusPill timer={timer} now={now} /> : null}
       <Sheet open={sheetOpen} onOpenChange={focusStore.setSheet} title="Fokus">
         {timer && now ? (
           <FocusControls timer={timer} now={now} inPip={inPip} pipError={pipError} onPip={togglePip} />
@@ -416,6 +419,8 @@ function FocusControls({
 }) {
   const [markDone, setMarkDone] = useState(true);
   const [canPip] = useState(pipSupported);
+  const [appleTouch] = useState(isAppleTouch);
+  const router = useRouter();
   const focused = Math.floor(focusedMs(timer, now) / MIN);
   const finish = async () => {
     haptic();
@@ -467,6 +472,18 @@ function FocusControls({
             <Plus aria-hidden />5 Min.
           </Button>
         ) : null}
+        <Button
+          size="lg"
+          variant="outline"
+          onClick={() => {
+            haptic();
+            focusStore.setSheet(false);
+            router.push("/fokus");
+          }}
+        >
+          <Minimize2 aria-hidden />
+          Mini-Timer
+        </Button>
         {canPip ? (
           <Button size="lg" variant="outline" onClick={onPip}>
             <PictureInPicture2 aria-hidden />
@@ -475,9 +492,13 @@ function FocusControls({
         ) : null}
       </div>
       {canPip && pipError ? <p className="text-center text-footnote text-critical">{pipError}</p> : null}
-      {canPip ? (
-        <p className="text-center text-footnote text-muted-foreground">Bild-in-Bild legt den Timer als kleines Fenster über andere Apps, z. B. GoodNotes.</p>
-      ) : null}
+      <p className="text-center text-footnote text-muted-foreground">
+        {canPip
+          ? "Bild-in-Bild legt den Timer als kleines Fenster über andere Apps, z. B. GoodNotes."
+          : appleTouch
+            ? "Mini-Timer öffnen und LifeOS dann per Slide Over oder Stage Manager schmal neben GoodNotes legen."
+            : "Der Mini-Timer zeigt nur Zeit und Phase – passt in ein schmales Fenster."}
+      </p>
       <div className="space-y-3 border-t border-border pt-4">
         {timer.studySessionId !== null ? (
           <label className="flex min-h-11 items-center gap-3">
