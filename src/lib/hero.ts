@@ -48,7 +48,7 @@ export function changesTile(week: SchoolWeek, day: string): HeroTile {
   const first = relevant[0];
   const what = first.status === "cancelled" ? "entfällt" : "geändert";
   const when = first.day === day ? "heute" : "morgen";
-  const more = relevant.length > 1 ? ` · +${relevant.length - 1}` : "";
+  const more = relevant.length > 1 ? ` · ${relevant.length - 1} weitere` : "";
   return { label: "Ausfälle", value: String(relevant.length), caption: `${courseName(first)} ${what} ${when}${more}`, tone: "warning" };
 }
 
