@@ -10,7 +10,7 @@ import { Sheet } from "../ios/sheet";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
-import { drawFrame, enterPip, exitPip, pipActive, pipSupported, PIP_H, PIP_W } from "./pip";
+import { drawFrame, enterPip, exitPip, pipActive, pipErrorMessage, pipSupported, preparePip, releasePip, PIP_H, PIP_W } from "./pip";
 import { focusStore, openFocus, useFocus, type FocusPreset } from "./store";
 import {
   addMinutes,
@@ -84,6 +84,7 @@ export function FocusDock() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [inPip, setInPip] = useState(false);
+  const [pipError, setPipError] = useState<string | null>(null);
 
   // Sekundentakt, Phasen weiterschalten, Bild-in-Bild neu malen
   useEffect(() => {
@@ -101,6 +102,8 @@ export function FocusDock() {
         haptic();
       }
       if (canvasRef.current) {
+        // Stream schon vor dem Tipp starten; das folgende Malen liefert ihm das erste Bild
+        if (videoRef.current) preparePip(canvasRef.current, videoRef.current);
         const total = next.phase === "work" ? next.workMin * MIN : next.breakMin * MIN;
         drawFrame(canvasRef.current, {
           time: clock(displayMs(next, t)),
@@ -124,7 +127,10 @@ export function FocusDock() {
   useEffect(() => {
     const v = videoRef.current;
     if (!v) return;
-    const on = () => setInPip(pipActive(v));
+    const on = () => {
+      setInPip(pipActive(v));
+      setPipError(null);
+    };
     v.addEventListener("enterpictureinpicture", on);
     v.addEventListener("leavepictureinpicture", on);
     v.addEventListener("webkitpresentationmodechanged", on);
@@ -135,21 +141,25 @@ export function FocusDock() {
     };
   }, []);
 
-  const togglePip = useCallback(async () => {
+  // kein async/await vor enterPip: der PiP-Aufruf muss synchron im Tipp passieren
+  const togglePip = useCallback(() => {
     const v = videoRef.current;
     const c = canvasRef.current;
     if (!v || !c) return;
-    try {
-      if (pipActive(v)) await exitPip(v);
-      else await enterPip(c, v);
-    } catch (err) {
+    setPipError(null);
+    (pipActive(v) ? exitPip(v) : enterPip(c, v)).catch((err: unknown) => {
       console.warn("[fokus] Bild-in-Bild:", err);
-    }
+      setPipError(pipErrorMessage(err));
+    });
   }, []);
 
-  // Ende: Bild-in-Bild schließen
+  // Ende: Bild-in-Bild schließen und Stream beenden
   useEffect(() => {
-    if (!timer && videoRef.current && pipActive(videoRef.current)) void exitPip(videoRef.current);
+    const v = videoRef.current;
+    if (timer || !v) return;
+    const release = () => releasePip(v);
+    if (pipActive(v)) void exitPip(v).finally(release);
+    else release();
   }, [timer]);
 
   return (
@@ -157,13 +167,14 @@ export function FocusDock() {
       {timer && now && !sheetOpen ? <FocusPill timer={timer} now={now} /> : null}
       <Sheet open={sheetOpen} onOpenChange={focusStore.setSheet} title="Fokus">
         {timer && now ? (
-          <FocusControls timer={timer} now={now} inPip={inPip} onPip={togglePip} />
+          <FocusControls timer={timer} now={now} inPip={inPip} pipError={pipError} onPip={togglePip} />
         ) : sheetOpen ? (
           <FocusSetup preset={preset} />
         ) : null}
       </Sheet>
-      {/* Quelle für Bild-in-Bild: unsichtbar, aber im Dokument (sonst startet Safari das Video nicht) */}
-      <div aria-hidden className="pointer-events-none fixed top-0 left-0 size-px overflow-hidden opacity-0">
+      {/* Quelle für Bild-in-Bild: praktisch unsichtbar, aber im Dokument und nicht ganz transparent
+          (sonst startet bzw. pausiert iPadOS das gemutete Video) */}
+      <div aria-hidden className="pointer-events-none fixed top-0 left-0 size-px overflow-hidden opacity-[0.01]">
         <canvas ref={canvasRef} width={PIP_W} height={PIP_H} />
         <video ref={videoRef} muted playsInline width={PIP_W} height={PIP_H} />
       </div>
@@ -390,7 +401,19 @@ function FocusSetup({ preset }: { preset: FocusPreset | null }) {
   );
 }
 
-function FocusControls({ timer, now, inPip, onPip }: { timer: FocusTimer; now: number; inPip: boolean; onPip: () => void }) {
+function FocusControls({
+  timer,
+  now,
+  inPip,
+  pipError,
+  onPip,
+}: {
+  timer: FocusTimer;
+  now: number;
+  inPip: boolean;
+  pipError: string | null;
+  onPip: () => void;
+}) {
   const [markDone, setMarkDone] = useState(true);
   const [canPip] = useState(pipSupported);
   const focused = Math.floor(focusedMs(timer, now) / MIN);
@@ -451,6 +474,7 @@ function FocusControls({ timer, now, inPip, onPip }: { timer: FocusTimer; now: n
           </Button>
         ) : null}
       </div>
+      {canPip && pipError ? <p className="text-center text-footnote text-critical">{pipError}</p> : null}
       {canPip ? (
         <p className="text-center text-footnote text-muted-foreground">Bild-in-Bild legt den Timer als kleines Fenster über andere Apps, z. B. GoodNotes.</p>
       ) : null}

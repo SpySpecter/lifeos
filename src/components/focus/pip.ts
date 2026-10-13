@@ -27,13 +27,52 @@ export function pipActive(video: HTMLVideoElement | null): boolean {
   return document.pictureInPictureElement === video || (video as WebkitVideo).webkitPresentationMode === "picture-in-picture";
 }
 
-/** Muss direkt aus einem Tipp heraus aufgerufen werden (Nutzer-Geste). */
-export async function enterPip(canvas: HTMLCanvasElement, video: HTMLVideoElement): Promise<void> {
+/**
+ * Stream ans Video hängen und abspielen – vorab im Sekundentakt, damit beim Tipp auf „Bild-in-Bild“
+ * schon Bilder da sind (Safari lehnt PiP für ein Video ohne Daten ab). Gemutet + playsInline braucht keine Geste.
+ */
+export function preparePip(canvas: HTMLCanvasElement, video: HTMLVideoElement): void {
   if (!video.srcObject) video.srcObject = canvas.captureStream(4);
-  await video.play().catch(() => undefined);
+  if (video.paused) void video.play().catch(() => undefined);
+}
+
+/** Stream beenden, wenn kein Timer mehr läuft. */
+export function releasePip(video: HTMLVideoElement): void {
+  const stream = video.srcObject as MediaStream | null;
+  stream?.getTracks?.().forEach((track) => track.stop());
+  video.srcObject = null;
+}
+
+/** Video hat noch keine Daten – nach kurzem Warten nochmal tippen. */
+export class PipNotReadyError extends Error {
+  override name = "PipNotReadyError";
+}
+
+/**
+ * Muss direkt aus einem Tipp heraus aufgerufen werden: Safari verlangt den PiP-Aufruf synchron in der
+ * Nutzer-Geste – davor darf kein `await` stehen, sonst ist die Geste weg (NotAllowedError).
+ */
+export function enterPip(canvas: HTMLCanvasElement, video: HTMLVideoElement): Promise<void> {
+  preparePip(canvas, video);
+  if (video.readyState === 0 /* HAVE_NOTHING */) return Promise.reject(new PipNotReadyError());
+  if (typeof video.requestPictureInPicture === "function" && document.pictureInPictureEnabled) {
+    return video.requestPictureInPicture().then(() => undefined);
+  }
   const v = video as WebkitVideo;
-  if (typeof video.requestPictureInPicture === "function" && document.pictureInPictureEnabled) await video.requestPictureInPicture();
-  else v.webkitSetPresentationMode?.("picture-in-picture");
+  if (v.webkitSupportsPresentationMode?.("picture-in-picture") === false) {
+    return Promise.reject(new DOMException("Bild-in-Bild nicht verfügbar", "NotSupportedError"));
+  }
+  v.webkitSetPresentationMode?.("picture-in-picture");
+  return Promise.resolve();
+}
+
+/** Verständliche Meldung für die Fehler von `enterPip`. */
+export function pipErrorMessage(err: unknown): string {
+  const name = err instanceof Error || err instanceof DOMException ? err.name : "Fehler";
+  if (name === "PipNotReadyError") return "Bild-in-Bild lädt noch – tippe gleich nochmal.";
+  if (name === "NotAllowedError") return "iPadOS hat Bild-in-Bild blockiert (NotAllowedError). Tippe nochmal direkt auf den Knopf.";
+  if (name === "NotSupportedError") return "Bild-in-Bild ist hier nicht verfügbar (NotSupportedError). Öffne LifeOS in Safari.";
+  return `Bild-in-Bild ging nicht (${name}).`;
 }
 
 export async function exitPip(video: HTMLVideoElement): Promise<void> {
